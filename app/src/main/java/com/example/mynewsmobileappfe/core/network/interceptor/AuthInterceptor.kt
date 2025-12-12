@@ -17,21 +17,46 @@ class AuthInterceptor @Inject constructor(
     private val tokenManager: TokenManager
 ): Interceptor {
 
+    // jwt 필요없는 화이트리스트
+    private val whiteList = listOf(
+        // auth
+        "/auth/signup",
+        "/auth/login",
+        "/auth/reissue", // 이미 expired 된 accessToken을 헤더가 아니라 body에 넣어서 보냄
+
+        // article
+        "/articles",
+        "/articles/*/random"
+    )
+
+
     override fun intercept(chain: Interceptor.Chain): Response {
+
+        val request = chain.request()
+
+        // url에서 화이트리스트 분리
+        val path = request.url.encodedPath // QueryParameter 분리
+        val shouldSkip = whiteList.any { path.contains(it) }
+
+        // jwt 필요없는 대상 요청일 경우
+        if (shouldSkip) {
+            // OkHttp가 request를 서버로 전송함.
+            return chain.proceed(request)
+        }
 
         // 토큰 읽기 -> runBlocking 사용 (최초 한번만 실행 보장)
         val token = runBlocking { tokenManager.accessToken.first() }
 
         // Authorization 헤더 자동 추가
-        val request = if (!token.isNullOrEmpty()) {
-            chain.request().newBuilder()
+        val jwtRequest = if (!token.isNullOrEmpty()) {
+            request.newBuilder()
                 .addHeader("Authorization", token) // Bearer 없이 전송
                 .build()
         } else {
-            chain.request()
+            request
         }
 
-        // OkHttp가 최종 request를 서버로 전송함.
-        return chain.proceed(request)
+        // OkHttp가 jwtRequest를 서버로 전송함.
+        return chain.proceed(jwtRequest)
     }
 }
