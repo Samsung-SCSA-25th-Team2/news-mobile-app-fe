@@ -26,10 +26,13 @@ import kotlinx.coroutines.flow.map
  * - Thread-safe : 동시 접근 안전
  * - Lifecycle-safe : 메모리 누수 방지
  */
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "auth_prefs")
+private val Context.authDataStore: DataStore<Preferences> by preferencesDataStore(name = "auth_prefs")
 
 /**
  * AccessToken/RefreshToken을 DataStore에 영구 저장하고 관리
+ *
+ * - @Inject를 이용해 Hilt에 DI
+ * - 굳이 모듈을 만들지 않아도 됨
  */
 @Singleton
 class TokenManager @Inject constructor( // 이 클래스는 Hilt가 생성해라
@@ -43,15 +46,15 @@ class TokenManager @Inject constructor( // 이 클래스는 Hilt가 생성해라
 
     // 강제 로그아웃 이벤트 (앱 전역에서 구독)
     // Flow(스트림 - 다른 곳에서 온 데이터) vs StateFlow(가장 마지막 상태 - UI) vs SharedFlow(한번 이벤트 발생 - 로그아웃) ***
-    private val _logoutEvent = MutableSharedFlow<Unit>()
+    private val _logoutEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val logoutEvent: SharedFlow<Unit> = _logoutEvent.asSharedFlow()
 
     // 토큰 읽기 (Flow로 읽음) -> UI에서 collectAsState() 로 쉽게 사용 가능
-    val accessToken: Flow<String?> = context.dataStore.data.map { prefs ->
+    val accessToken: Flow<String?> = context.authDataStore.data.map { prefs ->
         prefs[ACCESS_TOKEN_KEY]
     }
 
-    val refreshToken: Flow<String?> = context.dataStore.data.map { prefs ->
+    val refreshToken: Flow<String?> = context.authDataStore.data.map { prefs ->
         prefs[REFRESH_TOKEN_KEY]
     }
 
@@ -59,7 +62,7 @@ class TokenManager @Inject constructor( // 이 클래스는 Hilt가 생성해라
 
     // 토큰 저장
     suspend fun saveTokens(accessToken: String, refreshToken: String) {
-        context.dataStore.edit { prefs ->
+        context.authDataStore.edit { prefs ->
             prefs[ACCESS_TOKEN_KEY] = accessToken
             prefs[REFRESH_TOKEN_KEY] = refreshToken
         }
@@ -67,7 +70,7 @@ class TokenManager @Inject constructor( // 이 클래스는 Hilt가 생성해라
 
     // 토큰 삭제 (로그아웃에서 사용할 예정)
     suspend fun clearTokens() {
-        context.dataStore.edit { prefs ->
+        context.authDataStore.edit { prefs ->
             prefs.remove(ACCESS_TOKEN_KEY)
             prefs.remove(REFRESH_TOKEN_KEY)
         }
