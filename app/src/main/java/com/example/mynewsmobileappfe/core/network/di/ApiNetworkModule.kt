@@ -4,7 +4,7 @@ import com.example.mynewsmobileappfe.core.datastore.TokenManager
 import com.example.mynewsmobileappfe.core.network.di.NetworkConfig.BASE_URL
 import com.example.mynewsmobileappfe.core.network.interceptor.AuthInterceptor
 import com.example.mynewsmobileappfe.core.network.interceptor.TokenAuthenticator
-import com.example.mynewsmobileappfe.feature.auth.data.remote.api.AuthApiService
+import com.example.mynewsmobileappfe.feature.auth.data.remote.api.TokenRefreshApiService
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import dagger.Module
@@ -51,8 +51,8 @@ object ApiNetworkModule {
     @Singleton
     fun provideTokenAuthenticator(
         tokenManager: TokenManager,
-        authApiService: AuthApiService
-    ): TokenAuthenticator = TokenAuthenticator(tokenManager, authApiService)
+        @TokenRefreshApi tokenRefreshApiService: TokenRefreshApiService // TokenAuthenticator가 재발급 전용 API만 쓰도록 강제
+    ): TokenAuthenticator = TokenAuthenticator(tokenManager, tokenRefreshApiService)
 
     // logging용
     @Provides
@@ -65,6 +65,7 @@ object ApiNetworkModule {
     // -> http에 대한 처리 로직 여기다가 체이닝 메서드로 구현
     @Provides
     @Singleton
+    @ApiOkHttp
     fun provideOkHttpClient(
         authInterceptor: AuthInterceptor,
         tokenAuthenticator: TokenAuthenticator,
@@ -82,8 +83,9 @@ object ApiNetworkModule {
     // 최종 rest api 담당하는 retrofit Hilt로 DI
     @Provides
     @Singleton
+    @ApiRetrofit
     fun provideRetrofit(
-        okHttpClient: OkHttpClient,
+        @ApiOkHttp okHttpClient: OkHttpClient,
         moshi: Moshi
     ): Retrofit =
         Retrofit.Builder()
