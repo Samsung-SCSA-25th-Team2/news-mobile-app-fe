@@ -4,7 +4,10 @@ import com.example.mynewsmobileappfe.feature.article.data.remote.api.ArticleApiS
 import com.example.mynewsmobileappfe.feature.auth.data.remote.api.AuthApiService
 import com.example.mynewsmobileappfe.feature.bookmark.data.remote.api.BookmarkApiService
 import com.example.mynewsmobileappfe.feature.user.data.remote.api.UserApiService
+import dagger.Module
 import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
 import retrofit2.Retrofit
 import javax.inject.Singleton
 
@@ -26,6 +29,8 @@ import javax.inject.Singleton
  * 일반적인 API 통신을 위해 설정된 Retrofit 인스턴스를
  * 다른 Retrofit 설정과 구분하기 위해 사용됩니다.
  */
+@Module
+@InstallIn(SingletonComponent::class)
 object ApiServiceModule {
 
     @Provides
