@@ -8,12 +8,12 @@ plugins {
 
 android {
     namespace = "com.example.mynewsmobileappfe"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.mynewsmobileappfe"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
 
@@ -50,6 +50,10 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.navigation:navigation-compose:2.8.0")
+    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -76,6 +80,9 @@ dependencies {
     // --- Hilt ---
     implementation("com.google.dagger:hilt-android:2.57.2")
     kapt("com.google.dagger:hilt-android-compiler:2.57.2")          // Hilt 컴파일러
+
+    // DataStore
+    implementation("androidx.datastore:datastore-preferences:1.0.0")
 
     // --- Coroutines (API 콜에 자주 씀) ---
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
