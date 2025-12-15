@@ -9,7 +9,10 @@ import com.example.mynewsmobileappfe.feature.news.data.remote.dto.PageResponse
 import com.example.mynewsmobileappfe.feature.news.domain.model.ReactionType
 import com.example.mynewsmobileappfe.feature.news.domain.model.Section
 import com.example.mynewsmobileappfe.feature.news.domain.repository.ArticleRepository
+import com.example.mynewsmobileappfe.feature.news.domain.usecase.ArticleActionManager
 import com.example.mynewsmobileappfe.feature.bookmark.domain.repository.BookmarkRepository
+import com.example.mynewsmobileappfe.feature.news.cache.ArticleCache
+import com.example.mynewsmobileappfe.feature.news.cache.ReactionCache
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -98,7 +101,8 @@ import javax.inject.Inject
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val articleRepository: ArticleRepository,
-    private val bookmarkRepository: BookmarkRepository
+    private val bookmarkRepository: BookmarkRepository,
+    private val articleActionManager: ArticleActionManager
 ) : ViewModel() {
 
     private var currentPage = 0
@@ -116,6 +120,24 @@ class HomeViewModel @Inject constructor(
     // TODO: 랜덤 기사 상태 (홈 상단 배너용)
     private val _randomArticle = MutableStateFlow<ArticleRandomResponse?>(null)
     val randomArticle: StateFlow<ArticleRandomResponse?> = _randomArticle.asStateFlow()
+
+    init {
+        // ArticleCache 변경 사항 구독하여 실시간 반영
+        ArticleCache.articles
+            .onEach { articlesMap ->
+                val currentState = _articlesState.value
+                if (currentState is HomeState.Success) {
+                    // 현재 목록의 기사들을 ArticleCache의 최신 상태로 업데이트
+                    val updatedContent = currentState.data.content.map { article ->
+                        articlesMap[article.articleId] ?: article
+                    }
+                    _articlesState.value = HomeState.Success(
+                        currentState.data.copy(content = updatedContent)
+                    )
+                }
+            }
+            .launchIn(viewModelScope)
+    }
 
     // TODO: 섹션 선택 시 기사 로드
     fun selectSection(section: Section) {
@@ -146,6 +168,13 @@ class HomeViewModel @Inject constructor(
                         isLastPage = data.last
                         articlesList.clear()
                         articlesList.addAll(data.content)
+
+                        // ArticleCache에 기사들 저장
+                        ArticleCache.putArticles(data.content)
+
+                        // 서버에서 받은 userReaction을 ReactionCache에 저장
+                        ReactionCache.setReactionsFromArticles(data.content)
+
                         HomeState.Success(data.copy(content = articlesList.toList()))
                     }
                     is Resource.Error -> HomeState.Error(result.message ?: "기사를 불러오는데 실패했습니다.")
@@ -172,6 +201,13 @@ class HomeViewModel @Inject constructor(
                         currentPage = nextPage
                         isLastPage = data.last
                         articlesList.addAll(data.content)
+
+                        // ArticleCache에 새 기사들 저장
+                        ArticleCache.putArticles(data.content)
+
+                        // 서버에서 받은 userReaction을 ReactionCache에 저장
+                        ReactionCache.setReactionsFromArticles(data.content)
+
                         _articlesState.value = HomeState.Success(
                             data.copy(
                                 content = articlesList.toList(),
@@ -187,42 +223,57 @@ class HomeViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
 
-    // TODO: 좋아요/싫어요
-    fun reactToArticle(articleId: Long, reactionType: ReactionType) {
-        articleRepository.reactToArticle(articleId, reactionType)
-            .onEach { result ->
-                if (result is Resource.Success) {
-                    // 간단히 최신 데이터로 새로고침
-                    refresh()
-                }
-            }
-            .flowOn(Dispatchers.IO)
-            .launchIn(viewModelScope)
+    // TODO: 좋아요/싫어요 - Optimistic Update (로딩 없이 즉시 반영)
+    fun toggleLike(articleId: Long) {
+        val currentReaction = ReactionCache.getReaction(articleId)
+        val newReaction = if (currentReaction == ReactionType.LIKE) {
+            ReactionType.NONE
+        } else {
+            ReactionType.LIKE
+        }
+        articleActionManager.reactToArticle(
+            articleId = articleId,
+            currentReaction = currentReaction,
+            newReaction = newReaction,
+            scope = viewModelScope
+        )
     }
 
-    // TODO: 북마크 토글
-    fun toggleBookmark(articleId: Long, isCurrentlyBookmarked: Boolean) {
-        val flow = if (isCurrentlyBookmarked) {
-            bookmarkRepository.removeBookmark(articleId)
+    fun toggleDislike(articleId: Long) {
+        val currentReaction = ReactionCache.getReaction(articleId)
+        val newReaction = if (currentReaction == ReactionType.DISLIKE) {
+            ReactionType.NONE
         } else {
-            bookmarkRepository.addBookmark(articleId)
+            ReactionType.DISLIKE
         }
+        articleActionManager.reactToArticle(
+            articleId = articleId,
+            currentReaction = currentReaction,
+            newReaction = newReaction,
+            scope = viewModelScope
+        )
+    }
 
-        flow
-            .onEach { result ->
-                if (result is Resource.Success) {
-                    // 북마크 상태 변경 후에도 목록은 유지
-                }
-            }
-            .flowOn(Dispatchers.IO)
-            .launchIn(viewModelScope)
+    // TODO: 북마크 토글 - Optimistic Update (로딩 없이 즉시 반영)
+    fun toggleBookmark(articleId: Long, isCurrentlyBookmarked: Boolean) {
+        articleActionManager.toggleBookmark(
+            articleId = articleId,
+            isCurrentlyBookmarked = isCurrentlyBookmarked,
+            scope = viewModelScope
+        )
     }
 
     private fun loadRandomArticle(section: Section) {
         articleRepository.getRandomArticle(section)
             .onEach { result ->
                 if (result is Resource.Success) {
-                    _randomArticle.value = result.data
+                    val randomArticle = result.data
+                    _randomArticle.value = randomArticle
+
+                    // 랜덤 기사의 userReaction도 ReactionCache에 저장
+                    randomArticle?.let {
+                        ReactionCache.setReactionFromString(it.articleId, it.userReaction)
+                    }
                 }
             }
             .flowOn(Dispatchers.IO)

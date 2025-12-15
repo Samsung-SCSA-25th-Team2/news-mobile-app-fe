@@ -1,10 +1,14 @@
 package com.example.mynewsmobileappfe.feature.bookmark.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
@@ -14,7 +18,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.mynewsmobileappfe.feature.news.data.remote.dto.ArticleResponse
-import com.example.mynewsmobileappfe.feature.news.ui.ArticleCache
+import com.example.mynewsmobileappfe.feature.news.cache.ArticleCache
+import com.example.mynewsmobileappfe.feature.news.cache.ReactionCache
 import com.example.mynewsmobileappfe.feature.news.ui.ArticleItem
 
 /**
@@ -94,19 +99,73 @@ fun BookmarkScreen(
     val state by viewModel.bookmarksState.collectAsStateWithLifecycle()
     val bookmarks by viewModel.bookmarks.collectAsStateWithLifecycle()
 
-    Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
         when (state) {
-            is BookmarkState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-            is BookmarkState.Empty -> Text("북마크한 기사가 없습니다", modifier = Modifier.align(Alignment.Center))
-            is BookmarkState.Error -> Text(
-                (state as BookmarkState.Error).message,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.align(Alignment.Center)
-            )
+            is BookmarkState.Loading -> {
+                CircularProgressIndicator(
+                    modifier = Modifier.align(Alignment.Center),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            is BookmarkState.Empty -> {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.BookmarkBorder,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                    Text(
+                        text = "북마크한 기사가 없습니다",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "관심 있는 기사를 북마크해보세요",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+            }
+            is BookmarkState.Error -> {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "오류가 발생했습니다",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        text = (state as BookmarkState.Error).message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
             is BookmarkState.Success -> {
-                LazyColumn {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
+                ) {
                     items(bookmarks, key = { it.articleId }) { article ->
                         val bookmarkedArticle = article.copy(bookmarked = true)
+                        val userReaction = ReactionCache.getReaction(article.articleId)
+
                         ArticleItem(
                             article = bookmarkedArticle,
                             onArticleClick = {
@@ -116,9 +175,9 @@ fun BookmarkScreen(
                             onLikeClick = {},
                             onDislikeClick = {},
                             onBookmarkClick = {},
-                            enableActions = false
+                            enableActions = false,
+                            userReaction = userReaction
                         )
-                        Spacer(Modifier.height(8.dp))
                     }
                 }
             }
