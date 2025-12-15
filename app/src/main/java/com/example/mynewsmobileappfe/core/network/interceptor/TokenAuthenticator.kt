@@ -182,6 +182,8 @@ class TokenAuthenticator(
     private suspend fun reissueAndRetry(response: Response, access: String, refresh: String): Request? {
         return try {
             Log.d(TAG, "AccessToken 만료 감지. 토큰 재발급을 시도합니다.")
+            Log.d(TAG, "AccessToken: ${access.take(20)}...")
+            Log.d(TAG, "RefreshToken: ${refresh.take(20)}...")
 
             // accessToken + refreshToken을 JSON body로 전송
             val reissueResponse = tokenRefreshApiService.refreshToken(
@@ -192,8 +194,9 @@ class TokenAuthenticator(
             if (!reissueResponse.isSuccessful) {
                 Log.w(
                     TAG,
-                    "토큰 재발급 실패 (HTTP ${reissueResponse.code()}). 강제 로그아웃 처리합니다."
+                    "토큰 재발급 실패 (HTTP ${reissueResponse.code()}). 응답: ${reissueResponse.errorBody()?.string()}"
                 )
+                Log.w(TAG, "강제 로그아웃 처리합니다.")
                 tokenManager.clearTokens() // => logoutEvent 발행
                 return null
             }

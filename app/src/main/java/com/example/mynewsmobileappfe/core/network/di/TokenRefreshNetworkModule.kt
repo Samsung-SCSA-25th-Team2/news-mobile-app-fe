@@ -28,8 +28,11 @@ object TokenRefreshNetworkModule {
     @Provides
     @Singleton
     @TokenRefreshOkHttp
-    fun provideAuthOkHttpClient(): OkHttpClient =
+    fun provideAuthOkHttpClient(
+        loggingInterceptor: okhttp3.logging.HttpLoggingInterceptor
+    ): OkHttpClient =
         OkHttpClient.Builder()
+            .addInterceptor(loggingInterceptor) // reissue 요청도 로깅
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)
             .writeTimeout(10, TimeUnit.SECONDS)
