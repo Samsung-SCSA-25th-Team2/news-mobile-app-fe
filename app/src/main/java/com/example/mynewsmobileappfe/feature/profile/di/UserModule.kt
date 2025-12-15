@@ -1,7 +1,7 @@
-package com.example.mynewsmobileappfe.feature.user.di
+package com.example.mynewsmobileappfe.feature.profile.di
 
-import com.example.mynewsmobileappfe.feature.user.data.repository.UserRepositoryImpl
-import com.example.mynewsmobileappfe.feature.user.domain.repository.UserRepository
+import com.example.mynewsmobileappfe.feature.profile.data.repository.UserRepositoryImpl
+import com.example.mynewsmobileappfe.feature.profile.domain.repository.UserRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn

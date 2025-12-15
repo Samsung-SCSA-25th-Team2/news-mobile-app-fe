@@ -1,9 +1,9 @@
 package com.example.mynewsmobileappfe.core.network.di
 
-import com.example.mynewsmobileappfe.feature.article.data.remote.api.ArticleApiService
+import com.example.mynewsmobileappfe.feature.news.data.remote.api.ArticleApiService
 import com.example.mynewsmobileappfe.feature.auth.data.remote.api.AuthApiService
 import com.example.mynewsmobileappfe.feature.bookmark.data.remote.api.BookmarkApiService
-import com.example.mynewsmobileappfe.feature.user.data.remote.api.UserApiService
+import com.example.mynewsmobileappfe.feature.profile.data.remote.api.UserApiService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
