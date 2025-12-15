@@ -1,7 +1,7 @@
-package com.example.mynewsmobileappfe.feature.article.di
+package com.example.mynewsmobileappfe.feature.news.di
 
-import com.example.mynewsmobileappfe.feature.article.data.repository.ArticleRepositoryImpl
-import com.example.mynewsmobileappfe.feature.article.domain.repository.ArticleRepository
+import com.example.mynewsmobileappfe.feature.news.data.repository.ArticleRepositoryImpl
+import com.example.mynewsmobileappfe.feature.news.domain.repository.ArticleRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn

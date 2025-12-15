@@ -62,6 +62,9 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
+    // coil (이미지 로딩)
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
     // --- Retrofit + Moshi ---
     implementation("com.squareup.retrofit2:retrofit:2.10.0")
     implementation("com.squareup.retrofit2:converter-moshi:2.10.0") // Moshi 컨버터
