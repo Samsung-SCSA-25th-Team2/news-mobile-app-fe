@@ -4,8 +4,8 @@ import com.example.mynewsmobileappfe.core.common.Resource
 import com.example.mynewsmobileappfe.feature.bookmark.domain.repository.BookmarkRepository
 import com.example.mynewsmobileappfe.feature.news.domain.model.ReactionType
 import com.example.mynewsmobileappfe.feature.news.domain.repository.ArticleRepository
-import com.example.mynewsmobileappfe.feature.news.ui.ArticleCache
-import com.example.mynewsmobileappfe.feature.news.ui.ReactionCache
+import com.example.mynewsmobileappfe.feature.news.cache.ArticleCache
+import com.example.mynewsmobileappfe.feature.news.cache.ReactionCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOn

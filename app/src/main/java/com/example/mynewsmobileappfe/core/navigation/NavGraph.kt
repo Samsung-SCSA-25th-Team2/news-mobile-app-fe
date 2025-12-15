@@ -10,7 +10,7 @@ import com.example.mynewsmobileappfe.feature.auth.ui.LoginScreen
 import com.example.mynewsmobileappfe.feature.auth.ui.SignUpScreen
 import com.example.mynewsmobileappfe.feature.bookmark.ui.BookmarkScreen
 import com.example.mynewsmobileappfe.feature.news.ui.ArticleDetailScreen
-import com.example.mynewsmobileappfe.feature.news.ui.ArticleCache
+import com.example.mynewsmobileappfe.feature.news.cache.ArticleCache
 import com.example.mynewsmobileappfe.feature.news.ui.HomeScreen
 import com.example.mynewsmobileappfe.feature.profile.ui.ProfileScreen
 
