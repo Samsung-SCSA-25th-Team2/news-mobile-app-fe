@@ -8,28 +8,65 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+    primary = SamsungBlueLightDark,
+    onPrimary = Color.White,
+    primaryContainer = SamsungBlueDark,
+    onPrimaryContainer = SamsungBlueLightDark,
+
+    secondary = SamsungSkyBlueDark,
+    onSecondary = Color.White,
+    secondaryContainer = SamsungNavy,
+    onSecondaryContainer = SamsungSkyBlueDark,
+
+    tertiary = SamsungSkyBlue,
+    onTertiary = Color.White,
+
+    background = SamsungBackgroundDark,
+    onBackground = SamsungTextPrimaryDark,
+
+    surface = SamsungSurfaceDark,
+    onSurface = SamsungTextPrimaryDark,
+    surfaceVariant = SamsungSurfaceVariantDark,
+    onSurfaceVariant = SamsungTextSecondaryDark,
+
+    error = SamsungError,
+    onError = Color.White,
+
+    outline = SamsungTextTertiary,
+    outlineVariant = SamsungSurfaceVariantDark
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
+    primary = SamsungBlue,
     onPrimary = Color.White,
+    primaryContainer = SamsungBlueLight,
+    onPrimaryContainer = SamsungNavy,
+
+    secondary = SamsungSkyBlue,
     onSecondary = Color.White,
+    secondaryContainer = SamsungBackgroundLight,
+    onSecondaryContainer = SamsungBlueDark,
+
+    tertiary = SamsungBlueDark,
     onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+
+    background = SamsungBackgroundLight,
+    onBackground = SamsungTextPrimary,
+
+    surface = SamsungSurfaceLight,
+    onSurface = SamsungTextPrimary,
+    surfaceVariant = SamsungSurfaceVariantLight,
+    onSurfaceVariant = SamsungTextSecondary,
+
+    error = SamsungError,
+    onError = Color.White,
+
+    outline = SamsungTextTertiary,
+    outlineVariant = SamsungSurfaceVariantLight
 )
 
 @Composable
