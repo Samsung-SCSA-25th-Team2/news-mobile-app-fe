@@ -8,12 +8,12 @@ plugins {
 
 android {
     namespace = "com.example.mynewsmobileappfe"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.mynewsmobileappfe"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
 
@@ -50,6 +50,10 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.navigation:navigation-compose:2.8.0")
+    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -57,6 +61,9 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+    // coil (이미지 로딩)
+    implementation("io.coil-kt:coil-compose:2.6.0")
 
     // --- Retrofit + Moshi ---
     implementation("com.squareup.retrofit2:retrofit:2.10.0")
@@ -77,9 +84,18 @@ dependencies {
     implementation("com.google.dagger:hilt-android:2.57.2")
     kapt("com.google.dagger:hilt-android-compiler:2.57.2")          // Hilt 컴파일러
 
+    // DataStore
+    implementation("androidx.datastore:datastore-preferences:1.0.0")
+
     // --- Coroutines (API 콜에 자주 씀) ---
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+
+    // --- Room Database ---
+    // Kotlin 2.1.0+ 호환을 위해 최신 버전 사용
+    implementation("androidx.room:room-runtime:2.7.0-alpha12")
+    implementation("androidx.room:room-ktx:2.7.0-alpha12")  // 코루틴 지원
+    kapt("androidx.room:room-compiler:2.7.0-alpha12")
 
 
 }
