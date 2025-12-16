@@ -179,13 +179,19 @@ fun ArticleDetailScreen(
 
                             // 본문 내용
                             article.content?.let { content ->
-                                Text(
-                                    text = content,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                Spacer(Modifier.height(16.dp))
+                                content
+                                    .split("\\n")
+                                    .filter { it.isNotBlank() }
+                                    .forEach { paragraph ->
+                                        Text(
+                                            text = paragraph.trim(),
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        Spacer(Modifier.height(12.dp))
+                                    }
                             }
+
 
                             // 원문 링크
                             Text(

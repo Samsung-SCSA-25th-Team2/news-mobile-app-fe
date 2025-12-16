@@ -20,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -243,9 +244,14 @@ fun RandomArticleCard(
             .fillMaxWidth()
             .padding(16.dp)
             .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        shape = RoundedCornerShape(16.dp)
-    ) {
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 4.dp,
+            pressedElevation = 8.dp)
+        ) {
         Column {
             // 썸네일 이미지
             article.thumbnailUrl?.let { url ->
@@ -254,9 +260,10 @@ fun RandomArticleCard(
                     contentDescription = "기사 이미지",
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(200.dp)
-                        .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
-                    contentScale = ContentScale.Crop
+                        .aspectRatio(16f / 9f),
+                        //.clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                    contentScale = ContentScale.Crop,
+                    alignment = Alignment.Center
                 )
             }
 
@@ -291,22 +298,19 @@ fun RandomArticleCard(
 
                 // 출처 및 날짜
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = article.publisher,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = " • ",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
                         text = formatDate(article.publishedAt),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = article.publisher,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
             }
@@ -331,7 +335,12 @@ fun ArticleItem(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clickable(onClick = onArticleClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 4.dp,
+            pressedElevation = 8.dp)       // 마우스 오버 시
     ) {
         Row(
             modifier = Modifier.padding(12.dp)
@@ -342,7 +351,7 @@ fun ArticleItem(
                     model = url,
                     contentDescription = "기사 썸네일",
                     modifier = Modifier
-                        .size(80.dp)
+                        .size(120.dp)
                         .clip(RoundedCornerShape(8.dp)),
                     contentScale = ContentScale.Crop
                 )
@@ -356,54 +365,42 @@ fun ArticleItem(
                 // 제목
                 Text(
                     text = article.title,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.titleMedium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(16.dp))   //이거 고치면 사진 작아짐
 
-                // 출처 및 날짜
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = article.publisher,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = " • ",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = formatDate(article.publishedAt),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                // 출처
+                Text(
+                    text = article.publisher,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(16.dp))
 
                 // 액션 버튼들 (좋아요, 싫어요, 북마크)
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     // 좋아요
                     IconButton(
                         onClick = onLikeClick,
-                        modifier = Modifier.size(32.dp),
+                        modifier = Modifier.size(36.dp), //사이즈가 충분히 커야 숫자,아이콘 둘다 보임
                         enabled = enableActions
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.ThumbUp,
                                 contentDescription = "좋아요",
-                                modifier = Modifier.size(16.dp),
+                                modifier = Modifier.size(24.dp),
                                 tint = MaterialTheme.colorScheme.primary
                             )
                             Text(
@@ -417,17 +414,17 @@ fun ArticleItem(
                     // 싫어요
                     IconButton(
                         onClick = onDislikeClick,
-                        modifier = Modifier.size(32.dp),
+                        modifier = Modifier.size(36.dp),
                         enabled = enableActions
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.ThumbDown,
                                 contentDescription = "싫어요",
-                                modifier = Modifier.size(16.dp),
+                                modifier = Modifier.size(24.dp),
                                 tint = MaterialTheme.colorScheme.error
                             )
                             Text(
@@ -439,6 +436,13 @@ fun ArticleItem(
                     }
 
                     Spacer(Modifier.weight(1f))
+
+                    //날짜
+                    Text(
+                        text = formatDate(article.publishedAt),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
 
                     // 북마크
                     IconButton(
@@ -455,6 +459,8 @@ fun ArticleItem(
                         )
                     }
                 }
+
+
             }
         }
     }
