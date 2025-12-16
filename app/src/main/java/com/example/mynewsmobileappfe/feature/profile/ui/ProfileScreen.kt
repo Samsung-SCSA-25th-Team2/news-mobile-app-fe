@@ -20,26 +20,43 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.mynewsmobileappfe.core.ui.theme.SamsungGradientEnd
 import com.example.mynewsmobileappfe.core.ui.theme.SamsungGradientStart
+import com.example.mynewsmobileappfe.feature.auth.ui.AuthEffect
+import com.example.mynewsmobileappfe.feature.auth.ui.viewmodel.AuthViewModel
 import com.example.mynewsmobileappfe.feature.profile.data.remote.dto.UserResponse
+import kotlinx.coroutines.flow.collectLatest
 
 @Composable
 fun ProfileScreen(
-    onNavigateToHome: () -> Unit = {},
     onNavigateToBookmark: () -> Unit = {},
-    onNavigateToLogin: () -> Unit = {},
-    viewModel: ProfileViewModel = hiltViewModel()
+    onLoginRequired: () -> Unit = {},
+    profileViewModel: ProfileViewModel = hiltViewModel(),
+    authViewModel: AuthViewModel = hiltViewModel()
 ) {
-    val userState by viewModel.userState.collectAsStateWithLifecycle()
-    val logoutEvent by viewModel.logoutEvent.collectAsStateWithLifecycle()
-    val deleteEvent by viewModel.deleteAccountEvent.collectAsStateWithLifecycle()
+    val userState by profileViewModel.userState.collectAsStateWithLifecycle()
+    val isLoggedIn by authViewModel.isLoggedIn.collectAsStateWithLifecycle() // 로그인 여부는 AuthViewModel이 단일 진실
 
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    if (logoutEvent || deleteEvent) {
-        viewModel.resetEvents()
-        onNavigateToLogin()
+    // AuthViewModel의 effect collect - 로그아웃/탈퇴 후 navigate
+    LaunchedEffect(Unit) {
+        authViewModel.effect.collectLatest { effect ->
+            when (effect) {
+                is AuthEffect.NavigateToAuthScreen -> {
+                    // 로그아웃 성공 → 로그인 화면으로 이동
+                    onLoginRequired()
+                    authViewModel.resetState()
+                }
+                else -> {}
+            }
+        }
     }
+
+    // Profile은 로그인 필요 화면이므로, 미로그인 상태면 로그인 화면 유도
+    LaunchedEffect(isLoggedIn) {
+        if (!isLoggedIn) onLoginRequired()
+    }
+    if (!isLoggedIn) return
 
     Box(
         modifier = Modifier
@@ -139,7 +156,7 @@ fun ProfileScreen(
         LogoutDialog(
             onConfirm = {
                 showLogoutDialog = false
-                viewModel.logout()
+                authViewModel.logout()
             },
             onDismiss = { showLogoutDialog = false }
         )
@@ -149,7 +166,7 @@ fun ProfileScreen(
         DeleteAccountDialog(
             onConfirm = {
                 showDeleteDialog = false
-                viewModel.deleteAccount()
+                profileViewModel.deleteAccount()
             },
             onDismiss = { showDeleteDialog = false }
         )

@@ -2,9 +2,11 @@ package com.example.mynewsmobileappfe.feature.news.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.mynewsmobileappfe.core.database.entity.Highlight
 import com.example.mynewsmobileappfe.feature.news.cache.ArticleCache
 import com.example.mynewsmobileappfe.feature.news.cache.ReactionCache
 import com.example.mynewsmobileappfe.feature.news.domain.model.ReactionType
+import com.example.mynewsmobileappfe.feature.news.domain.repository.HighlightRepository
 import com.example.mynewsmobileappfe.feature.news.domain.usecase.ArticleActionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -19,7 +22,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class ArticleDetailViewModel @Inject constructor(
-    private val articleActionManager: ArticleActionManager
+    private val articleActionManager: ArticleActionManager,
+    private val highlightRepository: HighlightRepository
 ) : ViewModel() {
 
     private val _articleState = MutableStateFlow<ArticleDetailState>(ArticleDetailState.Idle)
@@ -32,6 +36,10 @@ class ArticleDetailViewModel @Inject constructor(
     // 북마크 토글 결과 이벤트
     private val _bookmarkEvent = MutableStateFlow<BookmarkEvent>(BookmarkEvent.Idle)
     val bookmarkEvent: StateFlow<BookmarkEvent> = _bookmarkEvent.asStateFlow()
+
+    // 형광펜 하이라이트 목록
+    private val _highlights = MutableStateFlow<List<Highlight>>(emptyList())
+    val highlights: StateFlow<List<Highlight>> = _highlights.asStateFlow()
 
     init {
         // ArticleCache 변경 사항 구독
@@ -75,8 +83,60 @@ class ArticleDetailViewModel @Inject constructor(
             ReactionCache.setReactionFromString(articleId, article.userReaction)
 
             _userReaction.value = ReactionCache.getReaction(articleId)
+
+            // 형광펜 하이라이트 로드
+            loadHighlights(articleId)
         } else {
             _articleState.value = ArticleDetailState.Error("기사를 찾을 수 없습니다.")
+        }
+    }
+
+    /**
+     * 형광펜 하이라이트 로드
+     */
+    private fun loadHighlights(articleId: Long) {
+        highlightRepository.getHighlightsByArticleId(articleId)
+            .onEach { highlights ->
+                _highlights.value = highlights
+            }
+            .launchIn(viewModelScope)
+    }
+
+    /**
+     * 형광펜 하이라이트 추가
+     */
+    fun addHighlight(
+        articleId: Long,
+        startIndex: Int,
+        endIndex: Int,
+        text: String,
+        color: String
+    ) {
+        viewModelScope.launch {
+            try {
+                highlightRepository.addHighlight(
+                    articleId = articleId,
+                    startIndex = startIndex,
+                    endIndex = endIndex,
+                    text = text,
+                    color = color
+                )
+            } catch (e: Exception) {
+                android.util.Log.e("ArticleDetailViewModel", "Failed to add highlight", e)
+            }
+        }
+    }
+
+    /**
+     * 형광펜 하이라이트 삭제
+     */
+    fun deleteHighlight(highlightId: Long) {
+        viewModelScope.launch {
+            try {
+                highlightRepository.deleteHighlight(highlightId)
+            } catch (e: Exception) {
+                android.util.Log.e("ArticleDetailViewModel", "Failed to delete highlight", e)
+            }
         }
     }
 

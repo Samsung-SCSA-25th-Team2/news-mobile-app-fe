@@ -1,5 +1,7 @@
-package com.example.mynewsmobileappfe.feature.auth.ui
+package com.example.mynewsmobileappfe.feature.auth.ui.view
 
+import android.util.Patterns
+import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -10,9 +12,12 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -20,70 +25,69 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.mynewsmobileappfe.core.ui.theme.SamsungGradientEnd
 import com.example.mynewsmobileappfe.core.ui.theme.SamsungGradientStart
-import androidx.compose.runtime.*
+import com.example.mynewsmobileappfe.feature.auth.ui.AuthEffect
+import com.example.mynewsmobileappfe.feature.auth.ui.AuthState
+import com.example.mynewsmobileappfe.feature.auth.ui.validation.SignUpValidator
+import com.example.mynewsmobileappfe.feature.auth.ui.validation.ValidationResult
+import com.example.mynewsmobileappfe.feature.auth.ui.viewmodel.AuthViewModel
 
 /**
  * ========================================
- * LoginScreen - 동료 개발자 구현 가이드
+ * SignUpScreen - 동료 개발자 구현 가이드
  * ========================================
  *
  * [화면 구성 요소]
- * 1. 앱 로고 또는 타이틀
- * 2. 이메일 입력 필드 (OutlinedTextField)
- * 3. 비밀번호 입력 필드 (OutlinedTextField, visualTransformation)
- * 4. 로그인 버튼 (Button)
- * 5. 회원가입 화면으로 이동 링크 (TextButton)
- * 6. 로딩 인디케이터 (CircularProgressIndicator)
- * 7. 에러 메시지 표시 (Snackbar 또는 Text)
- *
- * [ViewModel 연동]
- * ```
- * @Composable
- * fun LoginScreen(
- *     viewModel: AuthViewModel = hiltViewModel(),
- *     onNavigateToSignUp: () -> Unit,
- *     onNavigateToHome: () -> Unit
- * ) {
- *     val loginState by viewModel.loginState.collectAsStateWithLifecycle()
- *
- *     LaunchedEffect(loginState) {
- *         if (loginState is AuthState.Success) {
- *             viewModel.resetState()
- *             onNavigateToHome()
- *         }
- *     }
- *
- *     // UI 구현...
- * }
- * ```
+ * 1. 뒤로가기 버튼 (IconButton)
+ * 2. 화면 타이틀 "회원가입"
+ * 3. 이메일 입력 필드
+ * 4. 비밀번호 입력 필드
+ * 5. 비밀번호 확인 입력 필드
+ * 6. 회원가입 버튼
+ * 7. 로딩 인디케이터
+ * 8. 에러/성공 메시지
  *
  * [유효성 검사]
- * - 이메일 형식 검사: android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
- * - 비밀번호 최소 길이: 8자 이상 권장
+ * - 이메일 형식 검사
+ * - 비밀번호 최소 8자
+ * - 비밀번호 확인 일치 여부
+ * - 모든 필드 입력 여부
  *
- * [참고]
- * - Material3 컴포넌트 사용
- * - 키보드 액션 설정 (imeAction)
- * - 포커스 관리 (FocusRequester)
+ * [에러 처리]
+ * - 409 Conflict: "이미 사용 중인 이메일입니다."
+ * - 400 Bad Request: "입력 정보를 확인해주세요."
  */
 @Composable
-fun LoginScreen(
-    onNavigateToSignUp: () -> Unit = {},
-    onNavigateToHome: () -> Unit = {},
+fun SignUpScreen(
+    onNavigateBack: () -> Unit = {},
+    onSignUpSuccess: () -> Unit = {},
     viewModel: AuthViewModel = hiltViewModel()
 ) {
-    val loginState by viewModel.loginState.collectAsStateWithLifecycle()
-    val isLoggedIn by viewModel.isLoggedIn.collectAsStateWithLifecycle()
-
-    LaunchedEffect(loginState, isLoggedIn) {
-        if (loginState is AuthState.Success || isLoggedIn) {
-            viewModel.resetState()
-            onNavigateToHome()
-        }
-    }
+    val signUpState by viewModel.signUpState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     var emailState = remember { mutableStateOf("") }
     var passwordState = remember { mutableStateOf("") }
+    var passwordConfirmState = remember { mutableStateOf("") }
+
+    // One-shot Effect Pattern: 회원가입 성공 시 정확히 한 번만 navigate
+    // - MutableSharedFlow로 1회성 이벤트 수신
+    // - recomposition 무관, 중복 navigate 방지
+    LaunchedEffect(Unit) {
+        viewModel.effect.collect { effect ->
+            when (effect) {
+                is AuthEffect.NavigateToAuthScreen -> {
+                    onSignUpSuccess()
+                    viewModel.resetState()
+                }
+                is AuthEffect.Toast -> {
+                    Toast
+                        .makeText(context, effect.message, Toast.LENGTH_SHORT)
+                        .show()
+                }
+                else -> {}
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -120,7 +124,7 @@ fun LoginScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "로그인",
+                        text = "회원가입",
                         style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.surface,
                         fontWeight = FontWeight.Bold
@@ -182,21 +186,70 @@ fun LoginScreen(
                         )
                     )
 
+                    OutlinedTextField(
+                        value = passwordConfirmState.value,
+                        onValueChange = { passwordConfirmState.value = it },
+                        label = { Text("비밀번호 확인") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                        )
+                    )
+
                     Spacer(Modifier.height(8.dp))
 
                     Button(
-                        onClick = { viewModel.login(emailState.value.trim(), passwordState.value) },
+                        // 회원가입 로직 여기서 다 처리!!!
+                        onClick = {
+                            val email = emailState.value
+                            val pw = passwordState.value
+                            val pw2 = passwordConfirmState.value
+
+                            val emailResult = SignUpValidator.validateEmail(email)
+                            if (emailResult is ValidationResult.Invalid) {
+                                Toast.makeText(context, emailResult.message, Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+
+                            val pwResult = SignUpValidator.validatePassword(pw, email)
+                            if (pwResult is ValidationResult.Invalid) {
+                                Toast.makeText(context, pwResult.message, Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+
+                            val confirmResult =
+                                SignUpValidator.validatePasswordConfirm(pw, pw2)
+                            if (confirmResult is ValidationResult.Invalid) {
+                                Toast.makeText(context, confirmResult.message, Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+
+                            // ✅ 모든 검증 통과
+                            viewModel.signUp(email.trim(), pw)
+
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(52.dp),
-                        enabled = loginState !is AuthState.Loading,
+                        enabled = signUpState !is AuthState.Loading,
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = MaterialTheme.colorScheme.onPrimary
                         )
                     ) {
-                        if (loginState is AuthState.Loading) {
+                        if (signUpState is AuthState.Loading) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp,
@@ -205,30 +258,31 @@ fun LoginScreen(
                             Spacer(Modifier.width(8.dp))
                         }
                         Text(
-                            text = "로그인",
+                            text = "회원가입",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
 
                     TextButton(
-                        onClick = onNavigateToSignUp,
+                        onClick = onNavigateBack,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "회원가입",
+                            text = "뒤로가기",
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
 
-                    if (loginState is AuthState.Error) {
+                    // 네트워크/서버 같은 “큰 오류”만 화면에 고정 표시
+                    if (signUpState is AuthState.Error) {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             color = MaterialTheme.colorScheme.errorContainer,
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text(
-                                text = (loginState as AuthState.Error).message,
+                                text = (signUpState as AuthState.Error).message,
                                 color = MaterialTheme.colorScheme.error,
                                 style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.padding(12.dp)

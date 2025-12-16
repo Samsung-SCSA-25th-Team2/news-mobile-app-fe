@@ -112,6 +112,7 @@ import com.example.mynewsmobileappfe.feature.news.domain.model.Section
 @Composable
 fun HomeScreen(
     section: Section? = Section.POLITICS,
+    isLoggedIn: Boolean = false,
     onLoginRequired: () -> Unit = {},
     onArticleClick: (Long) -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
@@ -210,13 +211,25 @@ fun HomeScreen(
                                 onArticleClick(displayArticle.articleId)
                             },
                             onLikeClick = {
-                                viewModel.toggleLike(displayArticle.articleId)
+                                if (isLoggedIn) {
+                                    viewModel.toggleLike(displayArticle.articleId)
+                                } else {
+                                    onLoginRequired()
+                                }
                             },
                             onDislikeClick = {
-                                viewModel.toggleDislike(displayArticle.articleId)
+                                if (isLoggedIn) {
+                                    viewModel.toggleDislike(displayArticle.articleId)
+                                } else {
+                                    onLoginRequired()
+                                }
                             },
                             onBookmarkClick = {
-                                viewModel.toggleBookmark(displayArticle.articleId, displayArticle.bookmarked)
+                                if (isLoggedIn) {
+                                    viewModel.toggleBookmark(displayArticle.articleId, displayArticle.bookmarked)
+                                } else {
+                                    onLoginRequired()
+                                }
                             },
                             enableActions = true,
                             userReaction = userReaction

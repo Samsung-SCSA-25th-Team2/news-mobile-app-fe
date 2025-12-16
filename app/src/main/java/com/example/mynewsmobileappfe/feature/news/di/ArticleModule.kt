@@ -1,7 +1,9 @@
 package com.example.mynewsmobileappfe.feature.news.di
 
 import com.example.mynewsmobileappfe.feature.news.data.repository.ArticleRepositoryImpl
+import com.example.mynewsmobileappfe.feature.news.data.repository.HighlightRepositoryImpl
 import com.example.mynewsmobileappfe.feature.news.domain.repository.ArticleRepository
+import com.example.mynewsmobileappfe.feature.news.domain.repository.HighlightRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -31,5 +33,11 @@ abstract class ArticleModule {
     abstract fun bindArticleRepository(
         articleRepositoryImpl: ArticleRepositoryImpl
     ): ArticleRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindHighlightRepository(
+        highlightRepositoryImpl: HighlightRepositoryImpl
+    ): HighlightRepository
 
 }
