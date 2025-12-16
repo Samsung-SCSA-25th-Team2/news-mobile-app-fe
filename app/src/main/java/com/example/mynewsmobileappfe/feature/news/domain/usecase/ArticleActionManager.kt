@@ -6,8 +6,10 @@ import com.example.mynewsmobileappfe.feature.news.domain.model.ReactionType
 import com.example.mynewsmobileappfe.feature.news.domain.repository.ArticleRepository
 import com.example.mynewsmobileappfe.feature.news.cache.ArticleCache
 import com.example.mynewsmobileappfe.feature.news.cache.ReactionCache
+import com.example.mynewsmobileappfe.feature.news.data.local.UserActionStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -25,7 +27,8 @@ import javax.inject.Singleton
 @Singleton
 class ArticleActionManager @Inject constructor(
     private val articleRepository: ArticleRepository,
-    private val bookmarkRepository: BookmarkRepository
+    private val bookmarkRepository: BookmarkRepository,
+    private val userActionStore: UserActionStore
 ) {
 
     /**
@@ -49,6 +52,9 @@ class ArticleActionManager @Inject constructor(
 
         // 사용자 반응 상태를 즉시 반영
         ReactionCache.setReaction(articleId, newReaction)
+        scope.launch {
+            userActionStore.setReaction(articleId, newReaction)
+        }
 
         // 1. 즉시 로컬 상태 업데이트 (Optimistic)
         ArticleCache.updateArticle(articleId) { article ->
@@ -121,6 +127,9 @@ class ArticleActionManager @Inject constructor(
                             )
                         }
                         ReactionCache.setReaction(articleId, currentReaction)
+                        scope.launch {
+                            userActionStore.setReaction(articleId, currentReaction)
+                        }
                         onError?.invoke(result.message ?: "반응 처리 실패")
                     }
                     else -> {}
@@ -159,6 +168,9 @@ class ArticleActionManager @Inject constructor(
         } else {
             android.util.Log.w("ArticleActionManager", "Article NOT found in cache! articleId=$articleId")
         }
+        scope.launch {
+            userActionStore.setBookmarked(articleId, newBookmarkState)
+        }
 
         // 2. 백그라운드에서 서버 요청
         val flow = if (isCurrentlyBookmarked) {
@@ -178,6 +190,9 @@ class ArticleActionManager @Inject constructor(
                         // 실패 시 롤백
                         ArticleCache.updateArticle(articleId) { article ->
                             article.copy(bookmarked = isCurrentlyBookmarked)
+                        }
+                        scope.launch {
+                            userActionStore.setBookmarked(articleId, isCurrentlyBookmarked)
                         }
                         onError?.invoke(result.message ?: "북마크 처리 실패")
                     }
