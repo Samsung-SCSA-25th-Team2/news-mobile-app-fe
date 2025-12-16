@@ -226,6 +226,9 @@ fun ArticleDetailScreen(
 
                             // 본문 내용 (하이라이트 포함)
                             article.content?.let { content ->
+                                // "\\n"을 줄바꿈으로 렌더링하되, 길이(인덱스) 보존을 위해 zero-width를 추가
+                                val contentForRender = content.replace("\\n", "\n\u200B")
+
                                 if (isEditMode) {
                                     // 안내 메시지
                                     Card(
@@ -247,7 +250,7 @@ fun ArticleDetailScreen(
 
                                     // 편집 모드: 문장 클릭 가능
                                     HighlightableText(
-                                        content = content,
+                                        content = contentForRender,
                                         highlights = highlights,
                                         onTextSelected = { start, end, text ->
                                             selectedTextRange = Pair(start, end)
@@ -281,12 +284,13 @@ fun ArticleDetailScreen(
                                 } else {
                                     // 보기 모드: 하이라이트만 표시
                                     HighlightedText(
-                                        content = content,
+                                        content = contentForRender,
                                         highlights = highlights
                                     )
                                 }
                                 Spacer(Modifier.height(16.dp))
                             }
+
 
                             // 원문 링크
                             Text(
@@ -404,6 +408,7 @@ private fun BookmarkButtonRow(
         )
     }
 }
+
 @Composable
 private fun ReactionButtons(
     article: ArticleResponse,
