@@ -7,7 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.LaunchedEffect
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.rememberNavController
-import com.example.mynewsmobileappfe.core.datastore.TokenManager
+import com.example.mynewsmobileappfe.core.jwt.TokenManager
 import com.example.mynewsmobileappfe.core.navigation.MainScreen
 import com.example.mynewsmobileappfe.core.navigation.Screen
 import com.example.mynewsmobileappfe.core.ui.theme.MyNewsMobileAppFETheme

@@ -37,7 +37,12 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
+import android.util.Log
+import androidx.compose.material.icons.filled.BrokenImage
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import com.example.mynewsmobileappfe.core.database.entity.Highlight
 import com.example.mynewsmobileappfe.feature.news.data.remote.dto.ArticleResponse
 import com.example.mynewsmobileappfe.feature.news.domain.model.ReactionType
@@ -177,8 +182,37 @@ fun ArticleDetailScreen(
                     ) {
                         // 썸네일 이미지
                         article.thumbnailUrl?.let { url ->
-                            AsyncImage(
-                                model = url,
+                            SubcomposeAsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(url)
+                                    .crossfade(true)
+                                    .build(),
+                                loading = {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(250.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator()
+                                    }
+                                },
+                                error = {
+                                    Log.e("ArticleDetailScreen", "Failed to load image: $url, error: ${it.result.throwable?.message}")
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(250.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.BrokenImage,
+                                            contentDescription = "이미지 로드 실패",
+                                            modifier = Modifier.size(48.dp),
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                },
                                 contentDescription = "기사 이미지",
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -199,7 +233,7 @@ fun ArticleDetailScreen(
 
                             Spacer(Modifier.height(12.dp))
 
-                            // 출처 및 날짜
+                            // 출처, 기자, 날짜
                             Row(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -214,7 +248,17 @@ fun ArticleDetailScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = formatDate(article.publishedAt),
+                                    text = article.source,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = " • ",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = formatDateDetail(article.publishedAt),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -710,4 +754,26 @@ fun HighlightedText(
         style = MaterialTheme.typography.bodyLarge,
         modifier = Modifier.fillMaxWidth()
     )
+}
+
+/**
+ * 날짜 포맷팅 헬퍼 함수 (ArticleDetailScreen용)
+ * ISO 8601 형식 → "yyyy.MM.dd HH:mm"
+ */
+private fun formatDateDetail(isoDate: String): String {
+    return try {
+        val publishedAt = LocalDateTime.parse(isoDate, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        val formatter = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm")
+        publishedAt.format(formatter)
+    } catch (e: Exception) {
+        // 파싱 실패 시 기본 포맷으로 fallback
+        try {
+            val parts = isoDate.split("T")
+            val date = parts[0].split("-")
+            val time = parts.getOrNull(1)?.substring(0, 5) ?: "00:00"
+            "${date[0]}.${date[1]}.${date[2]} $time"
+        } catch (e2: Exception) {
+            isoDate
+        }
+    }
 }

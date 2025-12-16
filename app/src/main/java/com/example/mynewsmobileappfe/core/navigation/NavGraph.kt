@@ -2,7 +2,9 @@ package com.example.mynewsmobileappfe.core.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -13,6 +15,7 @@ import com.example.mynewsmobileappfe.feature.auth.ui.view.SignUpScreen
 import com.example.mynewsmobileappfe.feature.bookmark.ui.BookmarkScreen
 import com.example.mynewsmobileappfe.feature.news.ui.ArticleDetailScreen
 import com.example.mynewsmobileappfe.feature.news.cache.ArticleCache
+import com.example.mynewsmobileappfe.feature.news.ui.HomeViewModel
 import com.example.mynewsmobileappfe.feature.news.ui.HomeScreen
 import com.example.mynewsmobileappfe.feature.profile.ui.ProfileScreen
 
@@ -99,10 +102,12 @@ fun NavGraph(
         composable(Screen.Politics.route) {
             val politicsSection = Screen.routeToSection(Screen.Politics.route)
             android.util.Log.d("NavGraph", "Politics composable - section: $politicsSection")
+            val homeViewModel = rememberSharedHomeViewModel(navController)
             HomeScreen(
                 section = politicsSection,
                 isLoggedIn = isLoggedIn,
                 onLoginRequired = onLoginRequired,
+                viewModel = homeViewModel,
                 onArticleClick = { articleId ->
                     navController.navigate(Screen.ArticleDetail.createRoute(articleId))
                 }
@@ -113,10 +118,12 @@ fun NavGraph(
         composable(Screen.Economy.route) {
             val economySection = Screen.routeToSection(Screen.Economy.route)
             android.util.Log.d("NavGraph", "Economy composable - section: $economySection")
+            val homeViewModel = rememberSharedHomeViewModel(navController)
             HomeScreen(
                 section = economySection,
                 isLoggedIn = isLoggedIn,
                 onLoginRequired = onLoginRequired,
+                viewModel = homeViewModel,
                 onArticleClick = { articleId ->
                     navController.navigate(Screen.ArticleDetail.createRoute(articleId))
                 }
@@ -127,10 +134,12 @@ fun NavGraph(
         composable(Screen.Social.route) {
             val socialSection = Screen.routeToSection(Screen.Social.route)
             android.util.Log.d("NavGraph", "Social composable - section: $socialSection")
+            val homeViewModel = rememberSharedHomeViewModel(navController)
             HomeScreen(
                 section = socialSection,
                 isLoggedIn = isLoggedIn,
                 onLoginRequired = onLoginRequired,
+                viewModel = homeViewModel,
                 onArticleClick = { articleId ->
                     navController.navigate(Screen.ArticleDetail.createRoute(articleId))
                 }
@@ -141,10 +150,12 @@ fun NavGraph(
         composable(Screen.Technology.route) {
             val technologySection = Screen.routeToSection(Screen.Technology.route)
             android.util.Log.d("NavGraph", "Technology composable - section: $technologySection")
+            val homeViewModel = rememberSharedHomeViewModel(navController)
             HomeScreen(
                 section = technologySection,
                 isLoggedIn = isLoggedIn,
                 onLoginRequired = onLoginRequired,
+                viewModel = homeViewModel,
                 onArticleClick = { articleId ->
                     navController.navigate(Screen.ArticleDetail.createRoute(articleId))
                 }
@@ -194,4 +205,14 @@ fun NavGraph(
             )
         }
     }
+}
+
+@Composable
+private fun rememberSharedHomeViewModel(navController: NavHostController): HomeViewModel {
+    // Start destination(정치) 백스택 엔트리를 기준으로 ViewModel을 공유해서
+    // 섹션 전환 시에도 캐시를 재사용한다.
+    val startDestinationEntry = remember(navController) {
+        navController.getBackStackEntry(Screen.Politics.route)
+    }
+    return hiltViewModel(startDestinationEntry)
 }

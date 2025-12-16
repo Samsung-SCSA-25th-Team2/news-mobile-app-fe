@@ -19,6 +19,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,7 +33,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
+import android.util.Log
+import androidx.compose.material.icons.filled.BrokenImage
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import kotlinx.coroutines.delay
 import com.example.mynewsmobileappfe.feature.news.cache.ArticleCache
 import com.example.mynewsmobileappfe.feature.news.cache.ReactionCache
 import com.example.mynewsmobileappfe.feature.news.data.remote.dto.ArticleResponse
@@ -118,18 +129,42 @@ fun HomeScreen(
     onArticleClick: (Long) -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
-    val context = LocalContext.current
     val listState = rememberLazyListState()
+    val articlesState by viewModel.articlesState.collectAsStateWithLifecycle()
+    val randomArticle by viewModel.randomArticle.collectAsStateWithLifecycle()
+    var shouldScrollToTop by remember { mutableStateOf(false) }
 
     // 섹션 변경 시 기사 로드
     LaunchedEffect(section) {
-        android.util.Log.d("HomeScreen", "LaunchedEffect triggered with section: $section")
-        android.util.Log.d("HomeScreen", "ViewModel instance: ${viewModel.hashCode()}")
-        section?.let { viewModel.selectSection(it) }
+        Log.d("HomeScreen", "LaunchedEffect triggered with section: $section")
+        Log.d("HomeScreen", "ViewModel instance: ${viewModel.hashCode()}")
+        section?.let {
+            viewModel.selectSection(it)
+            shouldScrollToTop = true
+        }
     }
 
-    val articlesState by viewModel.articlesState.collectAsStateWithLifecycle()
-    val randomArticle by viewModel.randomArticle.collectAsStateWithLifecycle()
+    // 섹션 변경 시 스크롤 최상단 이동 (데이터 로드 후)
+    LaunchedEffect(shouldScrollToTop, articlesState) {
+        if (shouldScrollToTop && articlesState is HomeState.Success) {
+            Log.d("HomeScreen", "Scrolling to top for section: $section")
+            // 약간의 delay로 렌더링 완료 보장
+            delay(700)
+            listState.scrollToItem(0, 0)
+            shouldScrollToTop = false
+        }
+    }
+
+    // 하이라이트 기사 자동 로테이션 (7초마다)
+    LaunchedEffect(section) {
+        section?.let { currentSection ->
+            while (true) {
+                Log.d("HomeScreen", "Auto-rotating highlight for section: $currentSection")
+                viewModel.loadRandomArticle(currentSection)
+                delay(7000) // 7초 대기
+            }
+        }
+    }
 
     // 무한 스크롤: 마지막 아이템 근처 도달 시 다음 페이지 로드
     val shouldLoadMore = remember {
@@ -182,17 +217,23 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
-                    // 랜덤 기사 (크게)
-                    randomArticle?.let { random ->
-                        val randomAsArticle = random.toArticleResponse()
-                        item {
-                            RandomArticleCard(
-                                article = randomAsArticle,
-                                onClick = {
-                                    ArticleCache.putArticle(randomAsArticle)
-                                    onArticleClick(random.articleId)
-                                }
-                            )
+                    // 랜덤 기사 (크게) - Crossfade 애니메이션
+                    item(key = "random_article_container") {
+                        Crossfade(
+                            targetState = randomArticle,
+                            animationSpec = tween(durationMillis = 500),
+                            label = "random_article_crossfade"
+                        ) { random ->
+                            random?.let {
+                                val randomAsArticle = it.toArticleResponse()
+                                RandomArticleCard(
+                                    article = randomAsArticle,
+                                    onClick = {
+                                        ArticleCache.putArticle(randomAsArticle)
+                                        onArticleClick(it.articleId)
+                                    }
+                                )
+                            }
                         }
                     }
 
@@ -282,13 +323,41 @@ fun RandomArticleCard(
         Column {
             // 썸네일 이미지
             article.thumbnailUrl?.let { url ->
-                AsyncImage(
-                    model = url,
+                SubcomposeAsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(url)
+                        .crossfade(true)
+                        .build(),
+                    loading = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(16f / 9f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    },
+                    error = {
+                        Log.e("HomeScreen", "Failed to load image: $url, error: ${it.result.throwable?.message}")
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(16f / 9f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.BrokenImage,
+                                contentDescription = "이미지 로드 실패",
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    },
                     contentDescription = "기사 이미지",
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(16f / 9f),
-                        //.clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
                     contentScale = ContentScale.Crop,
                     alignment = Alignment.Center
                 )
@@ -375,8 +444,37 @@ fun ArticleItem(
         ) {
             // 썸네일 (왼쪽)
             article.thumbnailUrl?.let { url ->
-                AsyncImage(
-                    model = url,
+                SubcomposeAsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(url)
+                        .crossfade(true)
+                        .build(),
+                    loading = {
+                        Box(
+                            modifier = Modifier
+                                .size(120.dp)
+                                .clip(RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        }
+                    },
+                    error = {
+                        Log.e("HomeScreen", "Failed to load thumbnail: $url, error: ${it.result.throwable?.message}")
+                        Box(
+                            modifier = Modifier
+                                .size(120.dp)
+                                .clip(RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.BrokenImage,
+                                contentDescription = "이미지 로드 실패",
+                                modifier = Modifier.size(32.dp),
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    },
                     contentDescription = "기사 썸네일",
                     modifier = Modifier
                         .size(120.dp)
@@ -497,16 +595,32 @@ fun ArticleItem(
 }
 
 /**
- * 날짜 포맷팅 헬퍼 함수
- * ISO 8601 형식 → 간단한 날짜 표시
+ * 날짜 포맷팅 헬퍼 함수 (HomeScreen용)
+ * - 24시간 이내: "N시간 전"
+ * - 24시간 이후: "yyyy.MM.dd"
  */
 fun formatDate(isoDate: String): String {
     return try {
-        // "2025-12-11T15:10:20" → "2025.12.11"
-        val parts = isoDate.split("T")[0].split("-")
-        "${parts[0]}.${parts[1]}.${parts[2]}"
+        val publishedAt = LocalDateTime.parse(isoDate, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        val now = LocalDateTime.now()
+        val hoursDiff = ChronoUnit.HOURS.between(publishedAt, now)
+
+        when {
+            hoursDiff < 1 -> "방금 전"
+            hoursDiff < 24 -> "${hoursDiff}시간 전"
+            else -> {
+                val formatter = DateTimeFormatter.ofPattern("yyyy.MM.dd")
+                publishedAt.format(formatter)
+            }
+        }
     } catch (e: Exception) {
-        isoDate
+        // 파싱 실패 시 기본 포맷으로 fallback
+        try {
+            val parts = isoDate.split("T")[0].split("-")
+            "${parts[0]}.${parts[1]}.${parts[2]}"
+        } catch (e2: Exception) {
+            isoDate
+        }
     }
 }
 

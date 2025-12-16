@@ -1,7 +1,7 @@
 package com.example.mynewsmobileappfe.core.network.interceptor
 
 import android.util.Log
-import com.example.mynewsmobileappfe.core.datastore.TokenManager
+import com.example.mynewsmobileappfe.core.jwt.TokenManager
 import com.example.mynewsmobileappfe.feature.auth.data.remote.api.TokenRefreshApiService
 import com.example.mynewsmobileappfe.feature.auth.data.remote.dto.TokenRefreshRequest
 import kotlinx.coroutines.flow.first

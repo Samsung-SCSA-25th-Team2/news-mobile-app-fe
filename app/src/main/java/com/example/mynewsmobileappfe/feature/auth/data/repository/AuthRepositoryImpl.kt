@@ -1,7 +1,7 @@
 package com.example.mynewsmobileappfe.feature.auth.data.repository
 
 import com.example.mynewsmobileappfe.core.common.Resource
-import com.example.mynewsmobileappfe.core.datastore.TokenManager
+import com.example.mynewsmobileappfe.core.jwt.TokenManager
 import com.example.mynewsmobileappfe.feature.auth.data.remote.api.AuthApiService
 import com.example.mynewsmobileappfe.feature.auth.data.remote.dto.LoginRequest
 import com.example.mynewsmobileappfe.feature.auth.data.remote.dto.SignUpRequest

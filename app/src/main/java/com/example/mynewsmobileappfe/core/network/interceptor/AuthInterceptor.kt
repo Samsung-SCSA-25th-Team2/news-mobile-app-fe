@@ -1,8 +1,7 @@
 package com.example.mynewsmobileappfe.core.network.interceptor
 
 import android.util.Log
-import com.example.mynewsmobileappfe.core.datastore.TokenManager
-import javax.inject.Inject
+import com.example.mynewsmobileappfe.core.jwt.TokenManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
