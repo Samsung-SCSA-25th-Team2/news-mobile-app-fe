@@ -73,67 +73,31 @@ val bottomNavItems = listOf(
  * - 기술: 기술 관련 기사
  * - 내 정보: 프로필 (로그인 필요)
  *
- * [사용 예시]
- * ```
- * @Composable
- * fun BottomNavBar(
- *     currentRoute: String?,
- *     onNavigate: (Screen) -> Unit,
- *     isLoggedIn: Boolean,
- *     onLoginRequired: () -> Unit
- * ) {
- *     NavigationBar {
- *         bottomNavItems.forEach { item ->
- *             val isSelected = currentRoute == item.screen.route
- *
- *             NavigationBarItem(
- *                 selected = isSelected,
- *                 onClick = {
- *                     // 로그인 필요한 화면인지 확인
- *                     if (item.screen.route in Screen.authRequiredScreens && !isLoggedIn) {
- *                         onLoginRequired()
- *                     } else {
- *                         onNavigate(item.screen)
- *                     }
- *                 },
- *                 icon = {
- *                     Icon(
- *                         imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
- *                         contentDescription = item.label
- *                     )
- *                 },
- *                 label = { Text(item.label) }
- *             )
- *         }
- *     }
- * }
- * ```
- *
  * [로그인 필요 화면 처리]
  * - 카테고리 화면(정치/경제/사회/기술): 로그인 불필요
  * - 내 정보(Profile): 로그인 필요
  * - 북마크: 프로필 화면에서 접근
- * - 미로그인 시 onLoginRequired() 호출 → 로그인 화면으로 이동
+ * - 미로그인 시 onLoginRequired0() 호출 → 로그인 화면으로 이동
  */
 @Composable
 fun BottomNavBar(
-    currentRoute: String?,
-    onNavigate: (Screen) -> Unit,
-    isLoggedIn: Boolean = false,
-    onLoginRequired: () -> Unit = {}
+    currentRoute: String?, // 지금 앱화면 위치
+    onNavigate: (Screen) -> Unit, // 탭 눌리면 화면 이동
+    isLoggedIn: Boolean = false, // 로그인 상태
+    onLoginRequired: () -> Unit = {} // 로그인 안된 상태에서 누르면 실행할 것
 ) {
     NavigationBar {
         bottomNavItems.forEach { item ->
             val isSelected = currentRoute == item.screen.route
 
             NavigationBarItem(
-                selected = isSelected,
+                selected = isSelected, // 선택된 현재 화면
                 onClick = {
                     // 로그인 필요한 화면인지 확인
                     if (item.screen.route in Screen.authRequiredScreens && !isLoggedIn) {
-                        onLoginRequired()
+                        onLoginRequired() // 콜백 -> login 화면
                     } else {
-                        onNavigate(item.screen)
+                        onNavigate(item.screen) // 콜백 -> bottomNavItems 중 화면
                     }
                 },
                 icon = {
