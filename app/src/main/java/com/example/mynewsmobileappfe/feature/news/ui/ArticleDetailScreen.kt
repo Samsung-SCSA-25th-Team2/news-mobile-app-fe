@@ -37,7 +37,10 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
+import android.util.Log
+import androidx.compose.material.icons.filled.BrokenImage
 import com.example.mynewsmobileappfe.core.database.entity.Highlight
 import com.example.mynewsmobileappfe.feature.news.data.remote.dto.ArticleResponse
 import com.example.mynewsmobileappfe.feature.news.domain.model.ReactionType
@@ -177,8 +180,37 @@ fun ArticleDetailScreen(
                     ) {
                         // 썸네일 이미지
                         article.thumbnailUrl?.let { url ->
-                            AsyncImage(
-                                model = url,
+                            SubcomposeAsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(url)
+                                    .crossfade(true)
+                                    .build(),
+                                loading = {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(250.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator()
+                                    }
+                                },
+                                error = {
+                                    Log.e("ArticleDetailScreen", "Failed to load image: $url, error: ${it.result.throwable?.message}")
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(250.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.BrokenImage,
+                                            contentDescription = "이미지 로드 실패",
+                                            modifier = Modifier.size(48.dp),
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                },
                                 contentDescription = "기사 이미지",
                                 modifier = Modifier
                                     .fillMaxWidth()

@@ -29,7 +29,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
+import android.util.Log
+import androidx.compose.material.icons.filled.BrokenImage
 import com.example.mynewsmobileappfe.feature.news.cache.ArticleCache
 import com.example.mynewsmobileappfe.feature.news.cache.ReactionCache
 import com.example.mynewsmobileappfe.feature.news.data.remote.dto.ArticleResponse
@@ -282,13 +285,41 @@ fun RandomArticleCard(
         Column {
             // 썸네일 이미지
             article.thumbnailUrl?.let { url ->
-                AsyncImage(
-                    model = url,
+                SubcomposeAsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(url)
+                        .crossfade(true)
+                        .build(),
+                    loading = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(16f / 9f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    },
+                    error = {
+                        Log.e("HomeScreen", "Failed to load image: $url, error: ${it.result.throwable?.message}")
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(16f / 9f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.BrokenImage,
+                                contentDescription = "이미지 로드 실패",
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    },
                     contentDescription = "기사 이미지",
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(16f / 9f),
-                        //.clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
                     contentScale = ContentScale.Crop,
                     alignment = Alignment.Center
                 )
@@ -375,8 +406,37 @@ fun ArticleItem(
         ) {
             // 썸네일 (왼쪽)
             article.thumbnailUrl?.let { url ->
-                AsyncImage(
-                    model = url,
+                SubcomposeAsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(url)
+                        .crossfade(true)
+                        .build(),
+                    loading = {
+                        Box(
+                            modifier = Modifier
+                                .size(120.dp)
+                                .clip(RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        }
+                    },
+                    error = {
+                        Log.e("HomeScreen", "Failed to load thumbnail: $url, error: ${it.result.throwable?.message}")
+                        Box(
+                            modifier = Modifier
+                                .size(120.dp)
+                                .clip(RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.BrokenImage,
+                                contentDescription = "이미지 로드 실패",
+                                modifier = Modifier.size(32.dp),
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    },
                     contentDescription = "기사 썸네일",
                     modifier = Modifier
                         .size(120.dp)
