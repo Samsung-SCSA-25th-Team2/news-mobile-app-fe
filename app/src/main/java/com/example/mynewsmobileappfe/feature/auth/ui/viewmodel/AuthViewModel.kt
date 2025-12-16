@@ -1,13 +1,17 @@
-package com.example.mynewsmobileappfe.feature.auth.ui
+package com.example.mynewsmobileappfe.feature.auth.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mynewsmobileappfe.core.common.Resource
 import com.example.mynewsmobileappfe.feature.auth.domain.repository.AuthRepository
+import com.example.mynewsmobileappfe.feature.auth.ui.AuthEffect
+import com.example.mynewsmobileappfe.feature.auth.ui.AuthState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -36,21 +40,6 @@ import javax.inject.Inject
  * 4. authRepository.isLoggedIn(): Flow<Boolean>
  *    - 로그인 상태 확인
  *
- * [구현 예시]
- * ```
- * fun login(email: String, password: String) {
- *     authRepository.login(email, password)
- *         .onEach { result ->
- *             _loginState.value = when (result) {
- *                 is Resource.Loading -> AuthState.Loading
- *                 is Resource.Success -> AuthState.Success
- *                 is Resource.Error -> AuthState.Error(result.message ?: "오류")
- *             }
- *         }
- *         .launchIn(viewModelScope)
- * }
- * ```
- *
  * [UI 상태 관리]
  * - MutableStateFlow로 상태 관리
  * - sealed class로 상태 정의 (Loading, Success, Error, Idle)
@@ -76,6 +65,12 @@ class AuthViewModel @Inject constructor(
     private val _isLoggedIn = MutableStateFlow(false)
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
+    // One-shot Effect (네비게이션 등 1회성 이벤트)
+    // - extraBufferCapacity = 1: emit 시 collector 없어도 1개까지 버퍼링
+    // - recomposition과 무관하게 정확히 한 번만 소비
+    private val _effect = MutableSharedFlow<AuthEffect>(extraBufferCapacity = 1)
+    val effect = _effect.asSharedFlow()
+
     init {
         // 앱 시작 시 로그인 상태 확인
         checkLoginStatus()
@@ -93,13 +88,21 @@ class AuthViewModel @Inject constructor(
     fun login(email: String, password: String) {
         authRepository.login(email, password)
             .onEach { result ->
-                _loginState.value = when (result) {
-                    is Resource.Loading -> AuthState.Loading
+                when (result) {
+                    is Resource.Loading -> {
+                        _loginState.value = AuthState.Loading
+                    }
                     is Resource.Success -> {
                         _isLoggedIn.value = true
-                        AuthState.Success
+                        _loginState.value = AuthState.Success
+                        _effect.emit(AuthEffect.NavigateHome) // 로그인 성공 → Home으로 navigate (1회성 이벤트)
                     }
-                    is Resource.Error -> AuthState.Error(result.message ?: "로그인에 실패했습니다.")
+                    is Resource.Error -> {
+                        val msg = result.message ?: "이메일 또는 비밀번호가 올바르지 않습니다."
+
+                        _effect.emit(AuthEffect.Toast(msg)) // Toast 발생
+                        _loginState.value = AuthState.Error(msg)
+                    }
                 }
             }
             .flowOn(Dispatchers.IO)
@@ -110,10 +113,20 @@ class AuthViewModel @Inject constructor(
     fun signUp(email: String, password: String) {
         authRepository.signUp(email, password)
             .onEach { result ->
-                _signUpState.value = when (result) {
-                    is Resource.Loading -> AuthState.Loading
-                    is Resource.Success -> AuthState.Success
-                    is Resource.Error -> AuthState.Error(result.message ?: "회원가입에 실패했습니다.")
+                when (result) {
+                    is Resource.Loading -> {
+                        _signUpState.value = AuthState.Loading
+                    }
+                    is Resource.Success -> {
+                        _signUpState.value = AuthState.Success
+                        _effect.emit(AuthEffect.NavigateToLogin) // 회원가입 성공 → Login 화면으로 navigate (1회성 이벤트)
+                    }
+                    is Resource.Error -> {
+                        val msg = result.message ?: "회원가입에 실패했습니다."
+
+                        _effect.emit(AuthEffect.Toast(msg))
+                        _signUpState.value = AuthState.Error(msg)
+                    }
                 }
             }
             .flowOn(Dispatchers.IO)
@@ -137,14 +150,4 @@ class AuthViewModel @Inject constructor(
         _loginState.value = AuthState.Idle
         _signUpState.value = AuthState.Idle
     }
-}
-
-/**
- * 인증 상태 sealed class
- */
-sealed class AuthState {
-    object Idle : AuthState()
-    object Loading : AuthState()
-    object Success : AuthState()
-    data class Error(val message: String) : AuthState()
 }
