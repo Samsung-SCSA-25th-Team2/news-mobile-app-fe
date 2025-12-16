@@ -1,7 +1,7 @@
 package com.example.mynewsmobileappfe.feature.profile.data.repository
 
 import com.example.mynewsmobileappfe.core.common.Resource
-import com.example.mynewsmobileappfe.core.datastore.TokenManager
+import com.example.mynewsmobileappfe.core.jwt.TokenManager
 import com.example.mynewsmobileappfe.feature.profile.data.remote.api.UserApiService
 import com.example.mynewsmobileappfe.feature.profile.data.remote.dto.UserResponse
 import com.example.mynewsmobileappfe.feature.profile.domain.repository.UserRepository

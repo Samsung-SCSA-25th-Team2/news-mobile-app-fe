@@ -1,4 +1,4 @@
-package com.example.mynewsmobileappfe.core.datastore
+package com.example.mynewsmobileappfe.core.jwt
 
 import android.content.Context
 import androidx.datastore.core.DataStore

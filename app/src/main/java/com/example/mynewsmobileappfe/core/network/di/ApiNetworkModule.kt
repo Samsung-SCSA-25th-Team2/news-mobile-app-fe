@@ -1,6 +1,6 @@
 package com.example.mynewsmobileappfe.core.network.di
 
-import com.example.mynewsmobileappfe.core.datastore.TokenManager
+import com.example.mynewsmobileappfe.core.jwt.TokenManager
 import com.example.mynewsmobileappfe.core.network.di.NetworkConfig.BASE_URL
 import com.example.mynewsmobileappfe.core.network.interceptor.AuthInterceptor
 import com.example.mynewsmobileappfe.core.network.interceptor.TokenAuthenticator
