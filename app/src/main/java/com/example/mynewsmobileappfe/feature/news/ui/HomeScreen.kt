@@ -9,6 +9,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material.icons.outlined.ThumbDown
 import androidx.compose.material3.*
@@ -28,7 +30,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.example.mynewsmobileappfe.feature.news.cache.ArticleCache
+import com.example.mynewsmobileappfe.feature.news.cache.ReactionCache
 import com.example.mynewsmobileappfe.feature.news.data.remote.dto.ArticleResponse
+import com.example.mynewsmobileappfe.feature.news.domain.model.ReactionType
 import com.example.mynewsmobileappfe.feature.news.domain.model.Section
 
 /**
@@ -108,6 +113,7 @@ import com.example.mynewsmobileappfe.feature.news.domain.model.Section
 @Composable
 fun HomeScreen(
     section: Section? = Section.POLITICS,
+    isLoggedIn: Boolean = false,
     onLoginRequired: () -> Unit = {},
     onArticleClick: (Long) -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
@@ -196,6 +202,8 @@ fun HomeScreen(
                         key = { it.articleId }
                     ) { article ->
                         val displayArticle = ArticleCache.getArticle(article.articleId) ?: article
+                        val userReaction = ReactionCache.getReaction(displayArticle.articleId)
+
                         ArticleItem(
                             article = displayArticle,
                             onArticleClick = {
@@ -203,10 +211,29 @@ fun HomeScreen(
                                 ArticleCache.putArticle(displayArticle)
                                 onArticleClick(displayArticle.articleId)
                             },
-                            onLikeClick = {},
-                            onDislikeClick = {},
-                            onBookmarkClick = {},
-                            enableActions = false
+                            onLikeClick = {
+                                if (isLoggedIn) {
+                                    viewModel.toggleLike(displayArticle.articleId)
+                                } else {
+                                    onLoginRequired()
+                                }
+                            },
+                            onDislikeClick = {
+                                if (isLoggedIn) {
+                                    viewModel.toggleDislike(displayArticle.articleId)
+                                } else {
+                                    onLoginRequired()
+                                }
+                            },
+                            onBookmarkClick = {
+                                if (isLoggedIn) {
+                                    viewModel.toggleBookmark(displayArticle.articleId, displayArticle.bookmarked)
+                                } else {
+                                    onLoginRequired()
+                                }
+                            },
+                            enableActions = true,
+                            userReaction = userReaction
                         )
                     }
 
@@ -328,7 +355,8 @@ fun ArticleItem(
     onLikeClick: () -> Unit,
     onDislikeClick: () -> Unit,
     onBookmarkClick: () -> Unit,
-    enableActions: Boolean = true
+    enableActions: Boolean = true,
+    userReaction: ReactionType = ReactionType.NONE  // 사용자의 현재 반응 상태
 ) {
     Card(
         modifier = Modifier
@@ -393,12 +421,13 @@ fun ArticleItem(
                         modifier = Modifier.size(36.dp), //사이즈가 충분히 커야 숫자,아이콘 둘다 보임
                         enabled = enableActions
                     ) {
+                        val isLiked = userReaction == ReactionType.LIKE
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.ThumbUp,
+                                imageVector = if (isLiked) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
                                 contentDescription = "좋아요",
                                 modifier = Modifier.size(24.dp),
                                 tint = MaterialTheme.colorScheme.primary
@@ -406,7 +435,7 @@ fun ArticleItem(
                             Text(
                                 text = "${article.likes}",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -417,12 +446,13 @@ fun ArticleItem(
                         modifier = Modifier.size(36.dp),
                         enabled = enableActions
                     ) {
+                        val isDisliked = userReaction == ReactionType.DISLIKE
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.ThumbDown,
+                                imageVector = if (isDisliked) Icons.Filled.ThumbDown else Icons.Outlined.ThumbDown,
                                 contentDescription = "싫어요",
                                 modifier = Modifier.size(24.dp),
                                 tint = MaterialTheme.colorScheme.error
@@ -430,7 +460,7 @@ fun ArticleItem(
                             Text(
                                 text = "${article.dislikes}",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (isDisliked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -496,6 +526,7 @@ private fun com.example.mynewsmobileappfe.feature.news.data.remote.dto.ArticleRa
         publishedAt = publishedAt,
         likes = 0,
         dislikes = 0,
-        bookmarked = bookmarked
+        bookmarked = bookmarked,
+        userReaction = userReaction
     )
 }

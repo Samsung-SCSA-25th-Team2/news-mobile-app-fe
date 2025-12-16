@@ -16,5 +16,6 @@ data class ArticleRandomResponse(
     val source: String,
     val publisher: String,
     val publishedAt: String,
-    val bookmarked: Boolean = false
+    val bookmarked: Boolean = false,
+    val userReaction: String? = null  // "LIKE", "DISLIKE", null
 )

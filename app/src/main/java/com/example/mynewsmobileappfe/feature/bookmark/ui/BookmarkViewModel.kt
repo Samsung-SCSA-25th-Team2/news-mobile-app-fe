@@ -1,11 +1,14 @@
 package com.example.mynewsmobileappfe.feature.bookmark.ui
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mynewsmobileappfe.core.common.Resource
 import com.example.mynewsmobileappfe.feature.news.data.remote.dto.ArticleResponse
 import com.example.mynewsmobileappfe.feature.news.data.remote.dto.PageResponse
+import com.example.mynewsmobileappfe.feature.news.cache.ArticleCache
 import com.example.mynewsmobileappfe.feature.bookmark.domain.repository.BookmarkRepository
+import com.example.mynewsmobileappfe.feature.news.cache.ReactionCache
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -84,6 +87,37 @@ class BookmarkViewModel @Inject constructor(
 
     init {
         loadBookmarks()
+
+        // ArticleCache 변경 사항 구독하여 실시간 반영
+        ArticleCache.articles
+            .onEach { articlesMap ->
+                Log.d("BookmarkViewModel", "ArticleCache updated. Total articles: ${articlesMap.size}")
+                val bookmarkedFromCache = articlesMap.values.filter { it.bookmarked }
+                Log.d("BookmarkViewModel", "Bookmarked articles in cache: ${bookmarkedFromCache.size}")
+
+                // 로딩 상태일 때 초기 빈 캐시로 상태를 덮어쓰지 않는다.
+                if (bookmarkedFromCache.isEmpty()) {
+                    if (_bookmarksState.value is BookmarkState.Loading) {
+                        Log.d("BookmarkViewModel", "Bookmarks empty but loading state, skipping")
+                        return@onEach
+                    }
+                    Log.d("BookmarkViewModel", "No bookmarks in cache, setting Empty state")
+                    _bookmarks.value = emptyList()
+                    _bookmarksState.value = BookmarkState.Empty
+                    return@onEach
+                }
+
+                val existingOrder = _bookmarks.value.map { it.articleId }
+                val bookmarkedMap = bookmarkedFromCache.associateBy { it.articleId }
+                val updatedExisting = existingOrder.mapNotNull { bookmarkedMap[it] }
+                val newOnes = bookmarkedFromCache.filter { it.articleId !in existingOrder }
+                val merged = newOnes + updatedExisting
+
+                Log.d("BookmarkViewModel", "Updated bookmarks: ${merged.size} (${newOnes.size} new, ${updatedExisting.size} existing)")
+                _bookmarks.value = merged
+                _bookmarksState.value = BookmarkState.Success(merged)
+            }
+            .launchIn(viewModelScope)
     }
 
     // TODO: 북마크 목록 로드
@@ -95,6 +129,13 @@ class BookmarkViewModel @Inject constructor(
                     is Resource.Success -> {
                         val bookmarks = result.data!!.content
                         _bookmarks.value = bookmarks
+
+                        // ArticleCache에 북마크 기사들 저장
+                        ArticleCache.putArticles(bookmarks)
+
+                        // 서버에서 받은 userReaction을 ReactionCache에 저장
+                        ReactionCache.setReactionsFromArticles(bookmarks)
+
                         if (bookmarks.isEmpty()) BookmarkState.Empty
                         else BookmarkState.Success(bookmarks)
                     }

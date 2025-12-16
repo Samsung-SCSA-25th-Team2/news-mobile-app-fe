@@ -1,16 +1,18 @@
 package com.example.mynewsmobileappfe.core.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import com.example.mynewsmobileappfe.feature.auth.ui.LoginScreen
-import com.example.mynewsmobileappfe.feature.auth.ui.SignUpScreen
+import com.example.mynewsmobileappfe.feature.auth.ui.view.LoginScreen
+import com.example.mynewsmobileappfe.feature.auth.ui.view.SignUpScreen
 import com.example.mynewsmobileappfe.feature.bookmark.ui.BookmarkScreen
 import com.example.mynewsmobileappfe.feature.news.ui.ArticleDetailScreen
-import com.example.mynewsmobileappfe.feature.news.ui.ArticleCache
+import com.example.mynewsmobileappfe.feature.news.cache.ArticleCache
 import com.example.mynewsmobileappfe.feature.news.ui.HomeScreen
 import com.example.mynewsmobileappfe.feature.profile.ui.ProfileScreen
 
@@ -36,59 +38,56 @@ import com.example.mynewsmobileappfe.feature.profile.ui.ProfileScreen
  * 4. 로그인 성공 후 → Politics (시작 화면)
  *
  * 5. 로그아웃/회원탈퇴 → Politics (백스택 클리어)
- *
- * [NavController 확장 함수]
- * ```
- * fun NavHostController.navigateToLogin() {
- *     navigate(Screen.Login.route) {
- *         launchSingleTop = true
- *     }
- * }
- *
- * fun NavHostController.navigateToPoliticsAfterAuth() {
- *     navigate(Screen.Politics.route) {
- *         popUpTo(Screen.Login.route) { inclusive = true }
- *     }
- * }
- *
- * fun NavHostController.navigateToLoginAndClearStack() {
- *     navigate(Screen.Login.route) {
- *         popUpTo(0) { inclusive = true }
- *     }
- * }
- * ```
  */
 @Composable
 fun NavGraph(
-    navController: NavHostController,
-    isLoggedIn: Boolean,
-    onLoginRequired: () -> Unit
+    navController: NavHostController, // 실제 화면 이동 수행
+    isLoggedIn: Boolean, // 로그인 여부
+    onLoginRequired: () -> Unit, // 로그인 화면으로 보내는 동작
+    modifier: Modifier = Modifier
 ) {
+    /**
+     * 지금 어떤 화면(Composable)을 보여줄지 결정해서 실제로 그려주는 컨테이너
+     */
     NavHost(
         navController = navController,
-        startDestination = Screen.Politics.route  // 정치 카테고리에서 시작 (로그인 불필요)
+        startDestination = Screen.Politics.route,  // 정치 카테고리에서 시작 (로그인 불필요)
+        modifier = modifier
     ) {
         // ===== Auth Screens =====
         composable(Screen.Login.route) {
-            LoginScreen(
-                onNavigateToSignUp = {
-                    navController.navigate(Screen.SignUp.route)
-                },
-                onNavigateToHome = {
-                    // 로그인 후 정치 카테고리로 이동
+            // `라우트 가드`: 이미 로그인 상태면 LoginScreen 렌더링하지 않고 바로 redirect
+            // - UX 개선: 로그인 화면 깜빡임 방지
+            // - launchSingleTop: 중복 navigate 방지
+            if (isLoggedIn) { // 로그인 O -> 로그인 화면으로 접근하려고 하면, 메인으로 라우팅
+                LaunchedEffect(Unit) {
                     navController.navigate(Screen.Politics.route) {
                         popUpTo(Screen.Login.route) { inclusive = true }
+                        launchSingleTop = true
                     }
                 }
-            )
+            } else { // 로그인 X -> 로그인 화면 O
+                LoginScreen(
+                    onNavigateToSignUp = {
+                        navController.navigate(Screen.SignUp.route)
+                    },
+                    onNavigateToHome = {
+                        // 로그인 후 정치 카테고리로 이동
+                        navController.navigate(Screen.Politics.route) {
+                            popUpTo(Screen.Login.route) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
+                )
+            }
         }
 
         composable(Screen.SignUp.route) {
             SignUpScreen(
-                onNavigateBack = {
+                onNavigateBack = { // 함수 인자로 넘기기
                     navController.popBackStack()
                 },
-                onSignUpSuccess = {
+                onSignUpSuccess = { // 함수 인자로 넘기기
                     // 회원가입 성공 → 로그인 화면으로
                     navController.popBackStack()
                 }
@@ -102,6 +101,7 @@ fun NavGraph(
             android.util.Log.d("NavGraph", "Politics composable - section: $politicsSection")
             HomeScreen(
                 section = politicsSection,
+                isLoggedIn = isLoggedIn,
                 onLoginRequired = onLoginRequired,
                 onArticleClick = { articleId ->
                     navController.navigate(Screen.ArticleDetail.createRoute(articleId))
@@ -115,6 +115,7 @@ fun NavGraph(
             android.util.Log.d("NavGraph", "Economy composable - section: $economySection")
             HomeScreen(
                 section = economySection,
+                isLoggedIn = isLoggedIn,
                 onLoginRequired = onLoginRequired,
                 onArticleClick = { articleId ->
                     navController.navigate(Screen.ArticleDetail.createRoute(articleId))
@@ -128,6 +129,7 @@ fun NavGraph(
             android.util.Log.d("NavGraph", "Social composable - section: $socialSection")
             HomeScreen(
                 section = socialSection,
+                isLoggedIn = isLoggedIn,
                 onLoginRequired = onLoginRequired,
                 onArticleClick = { articleId ->
                     navController.navigate(Screen.ArticleDetail.createRoute(articleId))
@@ -141,6 +143,7 @@ fun NavGraph(
             android.util.Log.d("NavGraph", "Technology composable - section: $technologySection")
             HomeScreen(
                 section = technologySection,
+                isLoggedIn = isLoggedIn,
                 onLoginRequired = onLoginRequired,
                 onArticleClick = { articleId ->
                     navController.navigate(Screen.ArticleDetail.createRoute(articleId))
@@ -155,12 +158,7 @@ fun NavGraph(
                     // 프로필에서 북마크로 이동
                     navController.navigate(Screen.Bookmark.route)
                 },
-                onNavigateToLogin = {
-                    // 로그아웃/탈퇴 후 로그인 화면으로 (백스택 클리어)
-                    navController.navigate(Screen.Login.route) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                }
+                onLoginRequired = onLoginRequired
             )
         }
 
@@ -188,6 +186,7 @@ fun NavGraph(
             val articleId = backStackEntry.arguments?.getLong("articleId") ?: 0L
             ArticleDetailScreen(
                 articleId = articleId,
+                isLoggedIn = isLoggedIn,
                 onNavigateBack = {
                     navController.popBackStack()
                 },
