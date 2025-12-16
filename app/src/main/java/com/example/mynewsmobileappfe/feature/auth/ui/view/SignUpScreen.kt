@@ -1,5 +1,7 @@
-package com.example.mynewsmobileappfe.feature.auth.ui
+package com.example.mynewsmobileappfe.feature.auth.ui.view
 
+import android.util.Patterns
+import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -10,9 +12,12 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -20,6 +25,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.mynewsmobileappfe.core.ui.theme.SamsungGradientEnd
 import com.example.mynewsmobileappfe.core.ui.theme.SamsungGradientStart
+import com.example.mynewsmobileappfe.feature.auth.ui.AuthEffect
+import com.example.mynewsmobileappfe.feature.auth.ui.AuthState
+import com.example.mynewsmobileappfe.feature.auth.ui.validation.SignUpValidator
+import com.example.mynewsmobileappfe.feature.auth.ui.validation.ValidationResult
+import com.example.mynewsmobileappfe.feature.auth.ui.viewmodel.AuthViewModel
 
 /**
  * ========================================
@@ -35,25 +45,6 @@ import com.example.mynewsmobileappfe.core.ui.theme.SamsungGradientStart
  * 6. 회원가입 버튼
  * 7. 로딩 인디케이터
  * 8. 에러/성공 메시지
- *
- * [ViewModel 연동]
- * ```
- * @Composable
- * fun SignUpScreen(
- *     viewModel: AuthViewModel = hiltViewModel(),
- *     onNavigateBack: () -> Unit,
- *     onSignUpSuccess: () -> Unit
- * ) {
- *     val signUpState by viewModel.signUpState.collectAsStateWithLifecycle()
- *
- *     LaunchedEffect(signUpState) {
- *         if (signUpState is AuthState.Success) {
- *             viewModel.resetState()
- *             onSignUpSuccess()  // 로그인 화면으로 이동
- *         }
- *     }
- * }
- * ```
  *
  * [유효성 검사]
  * - 이메일 형식 검사
@@ -72,15 +63,29 @@ fun SignUpScreen(
     viewModel: AuthViewModel = hiltViewModel()
 ) {
     val signUpState by viewModel.signUpState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
-    var emailState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
-    var passwordState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
-    var passwordConfirmState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+    var emailState = remember { mutableStateOf("") }
+    var passwordState = remember { mutableStateOf("") }
+    var passwordConfirmState = remember { mutableStateOf("") }
 
-    LaunchedEffect(signUpState) {
-        if (signUpState is AuthState.Success) {
-            viewModel.resetState()
-            onSignUpSuccess()
+    // One-shot Effect Pattern: 회원가입 성공 시 정확히 한 번만 navigate
+    // - MutableSharedFlow로 1회성 이벤트 수신
+    // - recomposition 무관, 중복 navigate 방지
+    LaunchedEffect(Unit) {
+        viewModel.effect.collect { effect ->
+            when (effect) {
+                is AuthEffect.NavigateToAuthScreen -> {
+                    onSignUpSuccess()
+                    viewModel.resetState()
+                }
+                is AuthEffect.Toast -> {
+                    Toast
+                        .makeText(context, effect.message, Toast.LENGTH_SHORT)
+                        .show()
+                }
+                else -> {}
+            }
         }
     }
 
@@ -205,10 +210,34 @@ fun SignUpScreen(
                     Spacer(Modifier.height(8.dp))
 
                     Button(
+                        // 회원가입 로직 여기서 다 처리!!!
                         onClick = {
-                            if (passwordState.value == passwordConfirmState.value) {
-                                viewModel.signUp(emailState.value.trim(), passwordState.value)
+                            val email = emailState.value
+                            val pw = passwordState.value
+                            val pw2 = passwordConfirmState.value
+
+                            val emailResult = SignUpValidator.validateEmail(email)
+                            if (emailResult is ValidationResult.Invalid) {
+                                Toast.makeText(context, emailResult.message, Toast.LENGTH_SHORT).show()
+                                return@Button
                             }
+
+                            val pwResult = SignUpValidator.validatePassword(pw, email)
+                            if (pwResult is ValidationResult.Invalid) {
+                                Toast.makeText(context, pwResult.message, Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+
+                            val confirmResult =
+                                SignUpValidator.validatePasswordConfirm(pw, pw2)
+                            if (confirmResult is ValidationResult.Invalid) {
+                                Toast.makeText(context, confirmResult.message, Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+
+                            // ✅ 모든 검증 통과
+                            viewModel.signUp(email.trim(), pw)
+
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -245,6 +274,7 @@ fun SignUpScreen(
                         )
                     }
 
+                    // 네트워크/서버 같은 “큰 오류”만 화면에 고정 표시
                     if (signUpState is AuthState.Error) {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),

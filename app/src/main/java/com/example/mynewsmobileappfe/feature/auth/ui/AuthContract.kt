@@ -20,8 +20,13 @@ sealed interface AuthEffect {
     /** 로그인 성공 → Home(Politics) 화면으로 이동 */
     data object NavigateHome : AuthEffect
 
-    /** 회원가입 성공 → Login 화면으로 이동 */
-    data object NavigateToLogin : AuthEffect
+    /**
+     * 인증 화면으로 이동 필요
+     * - 회원가입 성공 → Login 화면
+     * - 로그아웃 → Login 화면
+     * - 회원 탈퇴 → Login 화면
+     */
+    data object NavigateToAuthScreen : AuthEffect
 
     /** Toast 메시지 표시 */
     data class Toast(val message: String) : AuthEffect

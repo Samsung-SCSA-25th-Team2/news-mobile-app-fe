@@ -29,22 +29,10 @@ sealed class Screen(val route: String) {
 
     companion object {
         // 로그인이 필요한 화면 목록 (북마크는 프로필에서 접근, 프로필만 로그인 필요)
-        val authRequiredScreens = listOf(Profile.route)
+        val authRequiredScreens = setOf(Profile.route)
 
         // Bottom Navigation에 표시될 화면 (4개 카테고리 + 프로필)
         val bottomNavScreens = listOf(Politics, Economy, Social, Technology, Profile)
-
-        // 카테고리 화면 목록
-        val categoryScreens = listOf(Politics, Economy, Social, Technology)
-
-        // Screen to Section 매핑
-        fun screenToSection(screen: Screen): Section? = when (screen) {
-            Politics -> Section.POLITICS
-            Economy -> Section.ECONOMY
-            Social -> Section.SOCIAL
-            Technology -> Section.TECHNOLOGY
-            else -> null
-        }
 
         // route to Section 매핑
         fun routeToSection(route: String?): Section? = when (route) {

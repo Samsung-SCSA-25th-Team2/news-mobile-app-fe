@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.mynewsmobileappfe.core.common.Resource
 import com.example.mynewsmobileappfe.feature.auth.domain.repository.AuthRepository
 import com.example.mynewsmobileappfe.feature.auth.ui.AuthEffect
+import com.example.mynewsmobileappfe.feature.auth.ui.AuthErrorMessages
 import com.example.mynewsmobileappfe.feature.auth.ui.AuthState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -13,9 +14,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -77,72 +78,112 @@ class AuthViewModel @Inject constructor(
     }
 
     private fun checkLoginStatus() {
-        authRepository.isLoggedIn()
-            .onEach { isLoggedIn ->
-                _isLoggedIn.value = isLoggedIn
-            }
-            .launchIn(viewModelScope)
+        viewModelScope.launch {
+            authRepository.isLoggedIn().collect { // 로그인 여부를 Flow 형태로 Boolean값으로 스트림
+                isLoggedIn ->
+                    _isLoggedIn.update { isLoggedIn } // 로그인 상태 갱신
+                }
+        }
+    }
+
+    // 에러 메시지가 “큰 오류(네트워크/서버)”인지 판별
+    private fun isBigError(message: String): Boolean {
+        val m = message.lowercase()
+        return (
+                "네트워크" in m ||
+                        "timeout" in m ||
+                        "failed to connect" in m ||
+                        "unable to resolve host" in m ||
+                        "서버" in m ||
+                        "오류" in m && ("발생" in m || "내부" in m)
+                )
     }
 
     // 로그인
     fun login(email: String, password: String) {
-        authRepository.login(email, password)
-            .onEach { result ->
-                when (result) {
-                    is Resource.Loading -> {
-                        _loginState.value = AuthState.Loading
-                    }
-                    is Resource.Success -> {
-                        _isLoggedIn.value = true
-                        _loginState.value = AuthState.Success
-                        _effect.emit(AuthEffect.NavigateHome) // 로그인 성공 → Home으로 navigate (1회성 이벤트)
-                    }
-                    is Resource.Error -> {
-                        val msg = result.message ?: "이메일 또는 비밀번호가 올바르지 않습니다."
+        viewModelScope.launch {
+            authRepository.login(email, password)
+                .flowOn(Dispatchers.IO)
+                .collect { result ->
+                    when (result) {
+                        is Resource.Loading -> {
+                            _loginState.value = AuthState.Loading
+                        }
 
-                        _effect.emit(AuthEffect.Toast(msg)) // Toast 발생
-                        _loginState.value = AuthState.Error(msg)
+                        is Resource.Success -> {
+                            _isLoggedIn.value = true
+                            _loginState.value = AuthState.Success
+                            _effect.emit(AuthEffect.NavigateHome)
+                        }
+
+                        is Resource.Error -> {
+                            val msg = result.message ?: AuthErrorMessages.LOGIN_FAILED
+
+                            _effect.emit(AuthEffect.Toast(msg))
+                            _loginState.value =
+                                if (isBigError(msg)) AuthState.Error(msg)
+                                else AuthState.Idle
+                        }
                     }
                 }
-            }
-            .flowOn(Dispatchers.IO)
-            .launchIn(viewModelScope)
+        }
     }
 
     // 회원가입
     fun signUp(email: String, password: String) {
-        authRepository.signUp(email, password)
-            .onEach { result ->
-                when (result) {
-                    is Resource.Loading -> {
-                        _signUpState.value = AuthState.Loading
-                    }
-                    is Resource.Success -> {
-                        _signUpState.value = AuthState.Success
-                        _effect.emit(AuthEffect.NavigateToLogin) // 회원가입 성공 → Login 화면으로 navigate (1회성 이벤트)
-                    }
-                    is Resource.Error -> {
-                        val msg = result.message ?: "회원가입에 실패했습니다."
+        viewModelScope.launch {
+            authRepository.signUp(email, password)
+                .flowOn(Dispatchers.IO)
+                .collect { result ->
+                    when (result) {
+                        is Resource.Loading -> {
+                            _signUpState.value = AuthState.Loading
+                        }
 
-                        _effect.emit(AuthEffect.Toast(msg))
-                        _signUpState.value = AuthState.Error(msg)
+                        is Resource.Success -> {
+                            _signUpState.value = AuthState.Success
+                            _effect.emit(AuthEffect.NavigateToAuthScreen) // 회원가입 성공 → Login 이동
+                        }
+
+                        is Resource.Error -> {
+                            val msg = result.message ?: AuthErrorMessages.SIGNUP_FAILED
+                            _effect.emit(AuthEffect.Toast(msg)) // 409(중복), 400(입력오류) 등
+                            _signUpState.value =
+                                if (isBigError(msg)) AuthState.Error(msg)
+                                else AuthState.Idle
+                        }
                     }
                 }
-            }
-            .flowOn(Dispatchers.IO)
-            .launchIn(viewModelScope)
+        }
     }
 
     // 로그아웃
     fun logout() {
-        authRepository.logout()
-            .onEach { result ->
-                if (result is Resource.Success) {
-                    _isLoggedIn.value = false
+        viewModelScope.launch {
+            authRepository.logout()
+                .flowOn(Dispatchers.IO)
+                .collect { result ->
+                    when (result) {
+                        is Resource.Loading -> {
+                            _loginState.value = AuthState.Loading
+                        }
+
+                        is Resource.Success -> {
+                            _isLoggedIn.value = false
+                            resetState()
+                            _effect.emit(AuthEffect.NavigateToAuthScreen) // 로그아웃 성공 → Login 이동
+                        }
+
+                        is Resource.Error -> {
+                            val msg = result.message ?: AuthErrorMessages.LOGOUT_FAILED
+                            _effect.emit(AuthEffect.Toast(msg))
+                            _loginState.value =
+                                if (isBigError(msg)) AuthState.Error(msg)
+                                else AuthState.Idle
+                        }
+                    }
                 }
-            }
-            .flowOn(Dispatchers.IO)
-            .launchIn(viewModelScope)
+        }
     }
 
     // 상태 초기화 (화면 이동 후 호출)

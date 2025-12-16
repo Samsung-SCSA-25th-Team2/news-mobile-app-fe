@@ -5,11 +5,14 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.LaunchedEffect
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.rememberNavController
 import com.example.mynewsmobileappfe.core.datastore.TokenManager
 import com.example.mynewsmobileappfe.core.navigation.MainScreen
 import com.example.mynewsmobileappfe.core.navigation.Screen
 import com.example.mynewsmobileappfe.core.ui.theme.MyNewsMobileAppFETheme
+import com.example.mynewsmobileappfe.feature.auth.ui.AuthEffect
+import com.example.mynewsmobileappfe.feature.auth.ui.viewmodel.AuthViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -30,6 +33,37 @@ class MainActivity : ComponentActivity() {
                 // (단, Activity 재생성까지 영구 유지되는 건 아님)
                 val navController = rememberNavController()
 
+                val authViewModel: AuthViewModel = hiltViewModel()
+
+                // AuthEffect(로그인 성공/로그아웃/토스트) 전역 처리
+                LaunchedEffect(Unit) {
+                    authViewModel.effect.collect { effect ->
+                        when (effect) {
+                            AuthEffect.NavigateHome -> {
+                                navController.navigate(Screen.Politics.route) {
+                                    popUpTo(Screen.Login.route) { inclusive = true }
+                                    launchSingleTop = true
+                                }
+                            }
+
+                            AuthEffect.NavigateToAuthScreen -> {
+                                navController.navigate(Screen.Login.route) {
+                                    popUpTo(0) { inclusive = true }
+                                    launchSingleTop = true
+                                }
+                            }
+
+                            is AuthEffect.Toast -> {
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    effect.message,
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    }
+                }
+
                 // Composable에서 Flow를 "무한 수집"하는 작업은 side-effect이므로
                 // LaunchedEffect 같은 코루틴 스코프에서 수행해야 안전함
                 LaunchedEffect(Unit) {
@@ -42,7 +76,7 @@ class MainActivity : ComponentActivity() {
                             Toast.LENGTH_LONG
                         ).show()
 
-                        navController.navigate(Screen.Politics.route) {
+                        navController.navigate(Screen.Login.route) {
                             // 뒤로가기 시 인증이 필요한 이전 화면으로 돌아가지 못하게 백스택을 정리
                             popUpTo(0) { inclusive = true }
                             launchSingleTop = true
