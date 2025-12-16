@@ -13,6 +13,7 @@ import com.example.mynewsmobileappfe.feature.news.domain.usecase.ArticleActionMa
 import com.example.mynewsmobileappfe.feature.bookmark.domain.repository.BookmarkRepository
 import com.example.mynewsmobileappfe.feature.news.cache.ArticleCache
 import com.example.mynewsmobileappfe.feature.news.cache.ReactionCache
+import com.example.mynewsmobileappfe.feature.news.data.local.UserActionStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,7 +22,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlin.jvm.Volatile
 
 /**
  * ========================================
@@ -102,12 +105,21 @@ import javax.inject.Inject
 class HomeViewModel @Inject constructor(
     private val articleRepository: ArticleRepository,
     private val bookmarkRepository: BookmarkRepository,
-    private val articleActionManager: ArticleActionManager
+    private val articleActionManager: ArticleActionManager,
+    private val userActionStore: UserActionStore
 ) : ViewModel() {
 
     private var currentPage = 0
     private var isLastPage = false
     private val articlesList = mutableListOf<ArticleResponse>()
+    @Volatile
+    private var latestUserActions: UserActionStore.Snapshot = UserActionStore.Snapshot()
+
+    // 섹션별 기사 목록 캐시 (빠른 섹션 전환을 위해)
+    private val sectionCache = mutableMapOf<Section, PageResponse<ArticleResponse>>()
+
+    // 섹션별 랜덤 기사 캐시 (즉시 표시를 위해)
+    private val randomArticleCache = mutableMapOf<Section, ArticleRandomResponse>()
 
     // TODO: 현재 선택된 섹션
     private val _selectedSection = MutableStateFlow(Section.POLITICS)
@@ -137,6 +149,41 @@ class HomeViewModel @Inject constructor(
                 }
             }
             .launchIn(viewModelScope)
+
+        // 로컬에 저장된 액션(좋아요/싫어요/북마크)을 복원
+        userActionStore.snapshotFlow
+            .onEach { snapshot ->
+                latestUserActions = snapshot
+                // ReactionCache 복원
+                snapshot.reactions.forEach { (articleId, reaction) ->
+                    ReactionCache.setReaction(articleId, reaction)
+                    ArticleCache.updateArticle(articleId) { article ->
+                        article.copy(
+                            userReaction = when (reaction) {
+                                ReactionType.LIKE -> "LIKE"
+                                ReactionType.DISLIKE -> "DISLIKE"
+                                ReactionType.NONE -> null
+                            }
+                        )
+                    }
+                }
+
+                // 북마크 복원
+                snapshot.bookmarkedIds.forEach { articleId ->
+                    ArticleCache.updateArticle(articleId) { article ->
+                        article.copy(bookmarked = true)
+                    }
+                }
+            }
+            .launchIn(viewModelScope)
+
+        // 모든 섹션의 기사와 랜덤 기사를 백그라운드에서 미리 로드
+        android.util.Log.d("HomeViewModel", "Preloading all sections...")
+        Section.entries.forEach { section ->
+            android.util.Log.d("HomeViewModel", "Preloading section: $section")
+            loadArticlesInBackground(section)
+            preloadRandomArticle(section)
+        }
     }
 
     // TODO: 섹션 선택 시 기사 로드
@@ -144,17 +191,51 @@ class HomeViewModel @Inject constructor(
         android.util.Log.d("HomeViewModel", "selectSection called with: $section")
         android.util.Log.d("HomeViewModel", "ViewModel instance: ${this.hashCode()}")
 
-        // 같은 섹션이면 불필요한 재호출을 막는다.
-        if (_selectedSection.value == section && articlesList.isNotEmpty()) {
+        val isSameSection = _selectedSection.value == section
+        _selectedSection.value = section
+
+        // 캐시된 랜덤 기사 즉시 표시
+        randomArticleCache[section]?.let {
+            android.util.Log.d("HomeViewModel", "Using cached random article for section: $section")
+            _randomArticle.value = it
+        }
+
+        // 같은 섹션이면 기사 목록은 재로드하지 않음
+        if (isSameSection && articlesList.isNotEmpty()) {
+            android.util.Log.d("HomeViewModel", "Same section, no action needed")
             return
         }
 
-        _selectedSection.value = section
-        loadArticles(section)
-        loadRandomArticle(section)
+        // 캐시된 기사 목록 즉시 표시
+        val cachedData = sectionCache[section]
+        if (cachedData != null) {
+            android.util.Log.d("HomeViewModel", "Using cached articles for section: $section")
+            articlesList.clear()
+            articlesList.addAll(cachedData.content)
+            _articlesState.value = HomeState.Success(cachedData.copy(content = articlesList.toList()))
+            currentPage = cachedData.page
+            isLastPage = cachedData.last
+        } else {
+            // 캐시가 없으면 빈 상태로 시작 (곧 로드될 예정)
+            android.util.Log.d("HomeViewModel", "No cache yet, showing empty state for section: $section")
+            articlesList.clear()
+            _articlesState.value = HomeState.Success(
+                PageResponse(
+                    content = emptyList(),
+                    page = 0,
+                    size = 20,
+                    totalElements = 0,
+                    totalPages = 0,
+                    last = true
+                )
+            )
+        }
+
+        // 백그라운드에서 조용히 업데이트
+        loadArticlesInBackground(section)
     }
 
-    // TODO: 기사 목록 로드
+    // TODO: 기사 목록 로드 (로딩 상태 표시)
     fun loadArticles(section: Section) {
         currentPage = 0
         isLastPage = false
@@ -165,20 +246,58 @@ class HomeViewModel @Inject constructor(
                     is Resource.Loading -> HomeState.Loading
                     is Resource.Success -> {
                         val data = result.data!!
+                        val enrichedContent = enrichWithPersistedState(data.content)
+                        val enrichedData = data.copy(content = enrichedContent)
                         isLastPage = data.last
                         articlesList.clear()
-                        articlesList.addAll(data.content)
+                        articlesList.addAll(enrichedContent)
 
                         // ArticleCache에 기사들 저장
-                        ArticleCache.putArticles(data.content)
+                        ArticleCache.putArticles(enrichedContent)
 
                         // 서버에서 받은 userReaction을 ReactionCache에 저장
-                        ReactionCache.setReactionsFromArticles(data.content)
+                        ReactionCache.setReactionsFromArticles(enrichedContent)
 
-                        HomeState.Success(data.copy(content = articlesList.toList()))
+                        // 섹션별 캐시에 저장
+                        sectionCache[section] = enrichedData.copy(content = articlesList.toList())
+
+                        HomeState.Success(enrichedData.copy(content = articlesList.toList()))
                     }
                     is Resource.Error -> HomeState.Error(result.message ?: "기사를 불러오는데 실패했습니다.")
                 }
+            }
+            .flowOn(Dispatchers.IO)
+            .launchIn(viewModelScope)
+    }
+
+    // 백그라운드에서 조용히 기사 목록 로드 (로딩 상태 표시 안함)
+    private fun loadArticlesInBackground(section: Section) {
+        articleRepository.getArticles(section, page = 0, size = 20)
+            .onEach { result ->
+                if (result is Resource.Success) {
+                    val data = result.data!!
+                    val enrichedContent = enrichWithPersistedState(data.content)
+                    val enrichedData = data.copy(content = enrichedContent)
+
+                    // ArticleCache에 기사들 저장
+                    ArticleCache.putArticles(enrichedContent)
+
+                    // 서버에서 받은 userReaction을 ReactionCache에 저장
+                    ReactionCache.setReactionsFromArticles(enrichedContent)
+
+                    // 섹션별 캐시에 저장
+                    sectionCache[section] = enrichedData
+
+                    // 현재 선택된 섹션인 경우에만 공유 변수 및 UI 업데이트
+                    if (_selectedSection.value == section) {
+                        currentPage = 0
+                        isLastPage = data.last
+                        articlesList.clear()
+                        articlesList.addAll(enrichedContent)
+                        _articlesState.value = HomeState.Success(enrichedData.copy(content = articlesList.toList()))
+                    }
+                }
+                // Error는 무시 (캐시된 데이터 유지)
             }
             .flowOn(Dispatchers.IO)
             .launchIn(viewModelScope)
@@ -198,25 +317,29 @@ class HomeViewModel @Inject constructor(
                 when (result) {
                     is Resource.Success -> {
                         val data = result.data!!
+                        val enrichedContent = enrichWithPersistedState(data.content)
                         currentPage = nextPage
                         isLastPage = data.last
-                        articlesList.addAll(data.content)
+                        articlesList.addAll(enrichedContent)
 
                         // ArticleCache에 새 기사들 저장
-                        ArticleCache.putArticles(data.content)
+                        ArticleCache.putArticles(enrichedContent)
 
                         // 서버에서 받은 userReaction을 ReactionCache에 저장
-                        ReactionCache.setReactionsFromArticles(data.content)
+                        ReactionCache.setReactionsFromArticles(enrichedContent)
 
-                        _articlesState.value = HomeState.Success(
-                            data.copy(
-                                content = articlesList.toList(),
-                                page = currentPage
-                            )
+                        val updatedData = data.copy(
+                            content = articlesList.toList(),
+                            page = currentPage
                         )
+
+                        // 섹션별 캐시 업데이트
+                        sectionCache[_selectedSection.value] = updatedData
+
+                        _articlesState.value = HomeState.Success(updatedData)
                     }
                     is Resource.Error -> _articlesState.value = HomeState.Error(result.message ?: "기사를 불러오는데 실패했습니다.")
-                    is Resource.Loading -> _articlesState.value = HomeState.Loading
+                    is Resource.Loading -> { /* 로딩 스피너 표시 안함 - 기존 데이터 유지 */ }
                 }
             }
             .flowOn(Dispatchers.IO)
@@ -263,16 +386,84 @@ class HomeViewModel @Inject constructor(
         )
     }
 
-    private fun loadRandomArticle(section: Section) {
+    private fun reactionToString(reaction: ReactionType): String? {
+        return when (reaction) {
+            ReactionType.LIKE -> "LIKE"
+            ReactionType.DISLIKE -> "DISLIKE"
+            ReactionType.NONE -> null
+        }
+    }
+
+    private fun enrichWithPersistedState(articles: List<ArticleResponse>): List<ArticleResponse> {
+        val snapshot = latestUserActions
+
+        return articles.map { article ->
+            var enriched = article
+
+            // 북마크 로컬 상태 반영
+            if (snapshot.bookmarkedIds.contains(article.articleId)) {
+                enriched = enriched.copy(bookmarked = true)
+            }
+
+            // 반응 로컬 상태 반영
+            snapshot.reactions[article.articleId]?.let { reaction ->
+                enriched = enriched.copy(userReaction = reactionToString(reaction))
+            }
+
+            enriched
+        }
+    }
+
+    fun loadRandomArticle(section: Section) {
         articleRepository.getRandomArticle(section)
             .onEach { result ->
                 if (result is Resource.Success) {
-                    val randomArticle = result.data
-                    _randomArticle.value = randomArticle
+                    var randomArticle = result.data
 
-                    // 랜덤 기사의 userReaction도 ReactionCache에 저장
-                    randomArticle?.let {
-                        ReactionCache.setReactionFromString(it.articleId, it.userReaction)
+                    // 로컬 저장소의 상태 반영
+                    randomArticle?.let { article ->
+                        val snapshot = userActionStore.getSnapshot()
+                        if (snapshot.bookmarkedIds.contains(article.articleId)) {
+                            randomArticle = article.copy(bookmarked = true)
+                        }
+                        snapshot.reactions[article.articleId]?.let { reaction ->
+                            randomArticle = randomArticle?.copy(userReaction = reactionToString(reaction))
+                        }
+                    }
+
+                    // 캐시에 저장
+                    randomArticle?.let { adjusted ->
+                        randomArticleCache[section] = adjusted
+
+                        // 현재 선택된 섹션이면 즉시 표시
+                        if (_selectedSection.value == section) {
+                            _randomArticle.value = adjusted
+                        }
+
+                        // userReaction도 ReactionCache에 저장
+                        ReactionCache.setReactionFromString(adjusted.articleId, adjusted.userReaction)
+                    }
+                }
+            }
+            .flowOn(Dispatchers.IO)
+            .launchIn(viewModelScope)
+    }
+
+    // 프리로드용 랜덤 기사 로드 (현재 섹션이 아니어도 캐시에 저장만)
+    private fun preloadRandomArticle(section: Section) {
+        articleRepository.getRandomArticle(section)
+            .onEach { result ->
+                if (result is Resource.Success) {
+                    result.data?.let { randomArticle ->
+                        val snapshot = userActionStore.getSnapshot()
+                        val enriched = randomArticle.copy(
+                            bookmarked = snapshot.bookmarkedIds.contains(randomArticle.articleId) || randomArticle.bookmarked,
+                            userReaction = snapshot.reactions[randomArticle.articleId]?.let { reactionToString(it) } ?: randomArticle.userReaction
+                        )
+
+                        android.util.Log.d("HomeViewModel", "Cached random article for section: $section")
+                        randomArticleCache[section] = enriched
+                        ReactionCache.setReactionFromString(enriched.articleId, enriched.userReaction)
                     }
                 }
             }
