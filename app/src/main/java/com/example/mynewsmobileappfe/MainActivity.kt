@@ -1,10 +1,14 @@
 package com.example.mynewsmobileappfe
 
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.rememberNavController
 import com.example.mynewsmobileappfe.core.jwt.TokenManager
@@ -16,30 +20,57 @@ import com.example.mynewsmobileappfe.feature.auth.ui.viewmodel.AuthViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
-@AndroidEntryPoint // Hilt를 사용하기 위한 애노테이션
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var tokenManager: TokenManager
-    // logoutEvent 담당
-    // tokenManager가 logoutEvent.emit(Unit) 같은 걸 해주면 → MainActivity가 잡아서 처리하는 구조
+
+    // ✅ Compose가 변경을 감지할 수 있도록 state로 변경
+    private var pendingNfcArticleId by mutableStateOf<Long?>(null)
+
+    private fun updatePendingFromIntent(intent: Intent?) {
+        val id = intent?.getLongExtra("nfc_article_id", -1L) ?: -1L
+        if (id > 0) {
+            pendingNfcArticleId = id
+            android.util.Log.d("MainActivity", "pendingNfcArticleId set to $id")
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        updatePendingFromIntent(intent)
+        android.util.Log.d("MainActivity", "onCreate, intent=$intent, data=${intent?.data}")
+
         setContent {
             MyNewsMobileAppFETheme {
-                // Composable 재구성(recomposition)에도 동일한 NavController 인스턴스를 유지
-                // (단, Activity 재생성까지 영구 유지되는 건 아님)
                 val navController = rememberNavController()
-
                 val authViewModel: AuthViewModel = hiltViewModel()
 
-                // AuthEffect(로그인 성공/로그아웃/토스트) 전역 처리
+                // ✅ NFC로 들어온 기사ID가 있으면 상세 화면으로 이동 (앱 켜져있든/꺼져있든 동일)
+                LaunchedEffect(pendingNfcArticleId) {
+                    val nfcId = pendingNfcArticleId ?: return@LaunchedEffect
+                    android.util.Log.d("MainActivity", "NFC navigate to articleId=$nfcId")
+
+                    navController.navigate(Screen.ArticleDetail.createRoute(nfcId)) {
+                        launchSingleTop = true
+                    }
+
+                    // 중복 이동 방지
+                    pendingNfcArticleId = null
+                }
+
+                // AuthEffect 전역 처리
                 LaunchedEffect(Unit) {
                     authViewModel.effect.collect { effect ->
                         when (effect) {
                             AuthEffect.NavigateHome -> {
+                                if (pendingNfcArticleId != null) {
+                                    // NFC 이동이 우선이므로 여기선 아무 것도 하지 않음
+                                    return@collect
+                                }
+                                // ✅ NFC 이동은 위 LaunchedEffect가 전담하므로 여기선 홈 네비게이션만
                                 navController.navigate(Screen.Politics.route) {
                                     popUpTo(Screen.Login.route) { inclusive = true }
                                     launchSingleTop = true
@@ -64,20 +95,16 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Composable에서 Flow를 "무한 수집"하는 작업은 side-effect이므로
-                // LaunchedEffect 같은 코루틴 스코프에서 수행해야 안전함
+                // logoutEvent 처리
                 LaunchedEffect(Unit) {
-                    // 로그아웃 이벤트 스트림을 계속 구독(수집)하면서 발생 시마다 처리
                     tokenManager.logoutEvent.collect {
-
                         Toast.makeText(
-                            this@MainActivity, // Compose 람다 안에서 Activity 컨텍스트를 명확히 지정
+                            this@MainActivity,
                             "세션이 만료되었습니다. 다시 로그인해주세요.",
                             Toast.LENGTH_LONG
                         ).show()
 
                         navController.navigate(Screen.Login.route) {
-                            // 뒤로가기 시 인증이 필요한 이전 화면으로 돌아가지 못하게 백스택을 정리
                             popUpTo(0) { inclusive = true }
                             launchSingleTop = true
                             restoreState = false
@@ -86,8 +113,13 @@ class MainActivity : ComponentActivity() {
                 }
 
                 MainScreen(navController = navController)
-                // 이후 -> NavGraph를 띄우거나, BottomNavBar 포함한 메인 UI를 구성
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        updatePendingFromIntent(intent)
     }
 }
