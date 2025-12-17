@@ -13,6 +13,11 @@ import retrofit2.http.Query
 
 interface ArticleApiService {
 
+    @GET("articles/{articleId}")
+    suspend fun getArticleById(
+        @Path("articleId") articleId: Long
+    ): Response<ArticleResponse>
+
     /**
      * 섹션별 기사 목록 조회
      * @param section 기사 섹션 (POLITICS, ECONOMY, SOCIAL, TECHNOLOGY)

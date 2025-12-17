@@ -19,6 +19,26 @@ class ArticleRepositoryImpl @Inject constructor(
     private val articleApiService: ArticleApiService
 ) : ArticleRepository {
 
+    override fun getArticleById(articleId: Long): Flow<Resource<ArticleResponse>> = flow {
+        emit(Resource.Loading())
+        try {
+            val response = articleApiService.getArticleById(articleId)
+            if (response.isSuccessful && response.body() != null) {
+                emit(Resource.Success(response.body()!!))
+            } else {
+                val errorMessage = when (response.code()) {
+                    404 -> "기사를 찾을 수 없습니다."
+                    else -> "기사를 불러오는데 실패했습니다."
+                }
+                emit(Resource.Error(errorMessage))
+            }
+        } catch (e: Exception) {
+            emit(Resource.Error(e.message ?: "네트워크 오류가 발생했습니다."))
+        }
+    }.flowOn(Dispatchers.IO)
+
+
+
     override fun getArticles(
         section: Section,
         page: Int,
