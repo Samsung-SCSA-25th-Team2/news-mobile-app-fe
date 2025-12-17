@@ -46,6 +46,7 @@ import java.time.format.DateTimeFormatter
 import com.example.mynewsmobileappfe.core.database.entity.Highlight
 import com.example.mynewsmobileappfe.feature.news.data.remote.dto.ArticleResponse
 import com.example.mynewsmobileappfe.feature.news.domain.model.ReactionType
+import com.example.mynewsmobileappfe.feature.news.nfc.LinkHceService
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -116,13 +117,16 @@ fun ArticleDetailScreen(
                             onClick = {
                                 when (val state = articleState) {
                                     is ArticleDetailState.Success -> {
-                                        val shareIntent = Intent().apply {
-                                            action = Intent.ACTION_SEND
-                                            type = "text/plain"
-                                            putExtra(Intent.EXTRA_SUBJECT, state.article.title)
-                                            putExtra(Intent.EXTRA_TEXT, "${state.article.title}\n\n${state.article.url}")
-                                        }
-                                        context.startActivity(Intent.createChooser(shareIntent, "기사 공유하기"))
+                                        // 여기서 기사 ID로 송신 모드 ON
+                                        val articleIdToSend = state.article.articleId
+
+                                        LinkHceService.startSending(articleIdToSend)
+
+                                        Toast.makeText(
+                                            context,
+                                            "이 기사를 NFC로 보낼 준비가 되었어요.\n다른 폰을 태그하면 articleId=$articleIdToSend 전송!",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
                                     }
                                     else -> {
                                         Toast.makeText(context, "기사를 불러오는 중입니다.", Toast.LENGTH_SHORT).show()
@@ -132,7 +136,7 @@ fun ArticleDetailScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Nfc,
-                                contentDescription = "기사 공유",
+                                contentDescription = "기사 NFC 공유",
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }

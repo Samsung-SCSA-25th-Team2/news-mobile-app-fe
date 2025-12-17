@@ -10,6 +10,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
 import com.example.mynewsmobileappfe.feature.auth.ui.view.LoginScreen
 import com.example.mynewsmobileappfe.feature.auth.ui.view.SignUpScreen
 import com.example.mynewsmobileappfe.feature.bookmark.ui.BookmarkScreen
@@ -192,6 +193,12 @@ fun NavGraph(
             route = Screen.ArticleDetail.route,
             arguments = listOf(
                 navArgument("articleId") { type = NavType.LongType }
+            ),
+            deepLinks = listOf(
+                // NFC 리더에서 쏘는 딥링크: nfcnews://article/{articleId}
+                navDeepLink {
+                    uriPattern = "nfcnews://article/{articleId}"
+                }
             )
         ) { backStackEntry ->
             val articleId = backStackEntry.arguments?.getLong("articleId") ?: 0L

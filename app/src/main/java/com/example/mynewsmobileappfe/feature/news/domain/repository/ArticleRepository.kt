@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.Flow
 
 interface ArticleRepository {
 
+    fun getArticleById(articleId: Long): Flow<Resource<ArticleResponse>>
+
     /**
      * 섹션별 기사 목록 조회
      * @param section 기사 섹션
