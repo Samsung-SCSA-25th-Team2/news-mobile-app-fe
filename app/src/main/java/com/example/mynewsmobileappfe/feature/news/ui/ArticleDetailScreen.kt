@@ -41,12 +41,14 @@ import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import android.util.Log
 import androidx.compose.material.icons.filled.BrokenImage
+import androidx.compose.ui.platform.LocalUriHandler
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import com.example.mynewsmobileappfe.core.database.entity.Highlight
 import com.example.mynewsmobileappfe.feature.news.data.remote.dto.ArticleResponse
 import com.example.mynewsmobileappfe.feature.news.domain.model.ReactionType
 import com.example.mynewsmobileappfe.feature.news.nfc.LinkHceService
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,6 +64,8 @@ fun ArticleDetailScreen(
     val userReaction by viewModel.userReaction.collectAsStateWithLifecycle()
     val bookmarkEvent by viewModel.bookmarkEvent.collectAsStateWithLifecycle()
     val highlights by viewModel.highlights.collectAsStateWithLifecycle()
+    val uriHandler = LocalUriHandler.current   // 링크 타고 웹사이트
+
 
     // 편집 모드 상태
     var isEditMode by remember { mutableStateOf(false) }
@@ -77,14 +81,6 @@ fun ArticleDetailScreen(
         topBar = {
             TopAppBar(
                 title = { Text(if (isEditMode) "형광펜 편집" else "기사 상세") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "뒤로가기"
-                        )
-                    }
-                },
                 actions = {
                     // 편집/완료 버튼 (북마크된 기사일 때만 표시)
                     when (val state = articleState) {
@@ -108,6 +104,7 @@ fun ArticleDetailScreen(
                                 }
                             }
                         }
+
                         else -> {}
                     }
 
@@ -128,8 +125,13 @@ fun ArticleDetailScreen(
                                             Toast.LENGTH_SHORT
                                         ).show()
                                     }
+
                                     else -> {
-                                        Toast.makeText(context, "기사를 불러오는 중입니다.", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(
+                                            context,
+                                            "기사를 불러오는 중입니다.",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
                                     }
                                 }
                             }
@@ -202,7 +204,10 @@ fun ArticleDetailScreen(
                                     }
                                 },
                                 error = {
-                                    Log.e("ArticleDetailScreen", "Failed to load image: $url, error: ${it.result.throwable?.message}")
+                                    Log.e(
+                                        "ArticleDetailScreen",
+                                        "Failed to load image: $url, error: ${it.result.throwable?.message}"
+                                    )
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -274,9 +279,18 @@ fun ArticleDetailScreen(
 
                             // 본문 내용 (하이라이트 포함)
                             article.content?.let { content ->
-                                // "\\n"을 줄바꿈으로 렌더링하되, 길이(인덱스) 보존을 위해 zero-width를 추가
-                                val contentForRender = content.replace("\\n", "\n\u200B")
+                                val rawContent = content.replace("\\n", "\n")
 
+                                val contentForRender = if (rawContent.contains("\n")) {
+                                    // 줄바꿈 이미 있음 > 그대로 사용
+                                    rawContent.replace("\n", "\n\u200B")
+                                } else {
+                                    // 줄바꿈 없음 > 문장 단위 줄바꿈 추가
+                                    rawContent
+                                        .replace(". ", ".\n\n\u200B")
+                                        .replace("! ", "!\n\n\u200B")
+                                        .replace("? ", "?\n\n\u200B")
+                                }
                                 if (isEditMode) {
                                     // 안내 메시지
                                     Card(
@@ -345,44 +359,64 @@ fun ArticleDetailScreen(
                                 text = "원문 보기",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        uriHandler.openUri(article.url)
+                                    },
                                 textAlign = TextAlign.Center
                             )
                             Text(
                                 text = article.url,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        uriHandler.openUri(article.url)
+                                    },
                                 textAlign = TextAlign.Center
                             )
 
                             Spacer(Modifier.height(24.dp))
                             Divider()
                             Spacer(Modifier.height(16.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                // 좋아요
+                                ReactionLikeColumn(
+                                    article = article,
+                                    userReaction = userReaction,
+                                    isLoggedIn = isLoggedIn,
+                                    onReact = { viewModel.reactToArticle(articleId, it) },
+                                    onLoginRequired = onLoginRequired
+                                )
 
-                            ReactionButtons(
-                                article = article,
-                                userReaction = userReaction,
-                                isLoggedIn = isLoggedIn,
-                                onReact = { newReaction ->
-                                    viewModel.reactToArticle(articleId, newReaction)
-                                },
-                                onLoginRequired = onLoginRequired
-                            )
+                                // 싫어요
+                                ReactionDislikeColumn(
+                                    article = article,
+                                    userReaction = userReaction,
+                                    isLoggedIn = isLoggedIn,
+                                    onReact = { viewModel.reactToArticle(articleId, it) },
+                                    onLoginRequired = onLoginRequired
+                                )
 
-                            Spacer(Modifier.height(32.dp))
+                                // 북마크
+                                BookmarkButtonColumn(
+                                    article = article,
+                                    bookmarkEvent = bookmarkEvent,
+                                    isLoggedIn = isLoggedIn,
+                                    onToggle = { viewModel.toggleBookmark(articleId, it) },
+                                    onResetEvent = { viewModel.resetBookmarkEvent() },
+                                    onLoginRequired = onLoginRequired
+                                )
+                            }
 
-                            // 북마크 버튼
-                            BookmarkButtonRow(
-                                article = article,
-                                bookmarkEvent = bookmarkEvent,
-                                isLoggedIn = isLoggedIn,
-                                onToggle = { isBookmarked ->
-                                    viewModel.toggleBookmark(articleId, isBookmarked)
-                                },
-                                onResetEvent = { viewModel.resetBookmarkEvent() },
-                                onLoginRequired = onLoginRequired
-                            )
 
                             Spacer(Modifier.height(16.dp))
                         }
@@ -396,7 +430,7 @@ fun ArticleDetailScreen(
 }
 
 @Composable
-private fun BookmarkButtonRow(
+private fun BookmarkButtonColumn(
     article: ArticleResponse,
     bookmarkEvent: BookmarkEvent,
     isLoggedIn: Boolean,
@@ -404,161 +438,170 @@ private fun BookmarkButtonRow(
     onResetEvent: () -> Unit,
     onLoginRequired: () -> Unit
 ) {
-    var isBookmarked by remember(article.articleId, article.bookmarked) { mutableStateOf(article.bookmarked) }
+    var isBookmarked by remember(article.articleId, article.bookmarked) {
+        mutableStateOf(article.bookmarked)
+    }
 
-    // 이벤트 반영
     LaunchedEffect(bookmarkEvent) {
         when (bookmarkEvent) {
             is BookmarkEvent.Success -> {
                 isBookmarked = bookmarkEvent.isBookmarked
                 onResetEvent()
             }
-            is BookmarkEvent.Error -> {
-                onResetEvent()
-            }
+
+            is BookmarkEvent.Error -> onResetEvent()
             else -> {}
         }
     }
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         FilledIconButton(
             onClick = {
-                if (isLoggedIn) {
-                    onToggle(isBookmarked)
-                } else {
-                    onLoginRequired()
-                }
+                if (isLoggedIn) onToggle(isBookmarked)
+                else onLoginRequired()
             },
             colors = IconButtonDefaults.filledIconButtonColors(
-                containerColor = if (isBookmarked)
-                    MaterialTheme.colorScheme.primary
-                else
-                    MaterialTheme.colorScheme.surfaceVariant
+                containerColor =
+                    if (isBookmarked) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.surfaceVariant
             )
         ) {
             Icon(
-                imageVector = if (isBookmarked) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
+                imageVector =
+                    if (isBookmarked) Icons.Filled.Bookmark
+                    else Icons.Filled.BookmarkBorder,
                 contentDescription = "북마크",
-                tint = if (isBookmarked)
-                    MaterialTheme.colorScheme.onPrimary
-                else
-                    MaterialTheme.colorScheme.onSurfaceVariant
+                tint =
+                    if (isBookmarked) MaterialTheme.colorScheme.onPrimary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+
+        Spacer(Modifier.height(6.dp))
+
         Text(
             text = if (isBookmarked) "북마크됨" else "북마크",
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
 
+
 @Composable
-private fun ReactionButtons(
+private fun ReactionLikeColumn(
     article: ArticleResponse,
     userReaction: ReactionType,
     isLoggedIn: Boolean,
     onReact: (ReactionType) -> Unit,
     onLoginRequired: () -> Unit
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // 좋아요 버튼
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
             FilledIconButton(
                 onClick = {
                     if (isLoggedIn) {
-                        val next = if (userReaction == ReactionType.LIKE) ReactionType.NONE else ReactionType.LIKE
+                        val next =
+                            if (userReaction == ReactionType.LIKE)
+                                ReactionType.NONE
+                            else
+                                ReactionType.LIKE
                         onReact(next)
-                    } else {
-                        onLoginRequired()
-                    }
+                    } else onLoginRequired()
                 },
                 colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = if (userReaction == ReactionType.LIKE)
-                        MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.surfaceVariant
+                    containerColor =
+                        if (userReaction == ReactionType.LIKE)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.surfaceVariant
                 )
             ) {
                 Icon(
-                    imageVector = if (userReaction == ReactionType.LIKE)
-                        Icons.Filled.ThumbUp
-                    else
-                        Icons.Outlined.ThumbUp,
+                    imageVector =
+                        if (userReaction == ReactionType.LIKE)
+                            Icons.Filled.ThumbUp
+                        else
+                            Icons.Outlined.ThumbUp,
                     contentDescription = "좋아요",
-                    tint = if (userReaction == ReactionType.LIKE)
-                        MaterialTheme.colorScheme.onPrimary
-                    else
-                        MaterialTheme.colorScheme.onSurfaceVariant
+                    tint =
+                        if (userReaction == ReactionType.LIKE)
+                            MaterialTheme.colorScheme.onPrimary
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "${article.likes}",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Text(
-                text = "좋아요",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Spacer(Modifier.width(6.dp))
+
+            Text(text = "${article.likes}")
         }
 
-        // 싫어요 버튼
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+        Spacer(Modifier.height(6.dp))
+
+        Text(text = "좋아요",
+            style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
+private fun ReactionDislikeColumn(
+    article: ArticleResponse,
+    userReaction: ReactionType,
+    isLoggedIn: Boolean,
+    onReact: (ReactionType) -> Unit,
+    onLoginRequired: () -> Unit
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
             FilledIconButton(
                 onClick = {
                     if (isLoggedIn) {
-                        val next = if (userReaction == ReactionType.DISLIKE) ReactionType.NONE else ReactionType.DISLIKE
+                        val next =
+                            if (userReaction == ReactionType.DISLIKE)
+                                ReactionType.NONE
+                            else
+                                ReactionType.DISLIKE
                         onReact(next)
-                    } else {
-                        onLoginRequired()
-                    }
+                    } else onLoginRequired()
                 },
                 colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = if (userReaction == ReactionType.DISLIKE)
-                        MaterialTheme.colorScheme.error
-                    else
-                        MaterialTheme.colorScheme.surfaceVariant
+                    containerColor =
+                        if (userReaction == ReactionType.DISLIKE)
+                            MaterialTheme.colorScheme.error
+                        else
+                            MaterialTheme.colorScheme.surfaceVariant
                 )
             ) {
                 Icon(
-                    imageVector = if (userReaction == ReactionType.DISLIKE)
-                        Icons.Filled.ThumbDown
-                    else
-                        Icons.Outlined.ThumbDown,
+                    imageVector =
+                        if (userReaction == ReactionType.DISLIKE)
+                            Icons.Filled.ThumbDown
+                        else
+                            Icons.Outlined.ThumbDown,
                     contentDescription = "싫어요",
-                    tint = if (userReaction == ReactionType.DISLIKE)
-                        MaterialTheme.colorScheme.onError
-                    else
-                        MaterialTheme.colorScheme.onSurfaceVariant
+                    tint =
+                        if (userReaction == ReactionType.DISLIKE)
+                            MaterialTheme.colorScheme.onError
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "${article.dislikes}",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Text(
-                text = "싫어요",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+
+            Spacer(Modifier.width(6.dp))
+
+            Text(text = "${article.dislikes}")
         }
+
+        Spacer(Modifier.height(6.dp))
+
+        Text(text = "싫어요", style = MaterialTheme.typography.bodySmall)
     }
 }
+
 
 /**
  * 형광펜 색상 선택 바
