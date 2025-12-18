@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">MyNewsMobileAppFE</string>
+    <string name="aid_service_desc">News NFC Sharing Service</string>
+    <string name="aid_group_desc">News NFC AID Group</string>
 </resources>
