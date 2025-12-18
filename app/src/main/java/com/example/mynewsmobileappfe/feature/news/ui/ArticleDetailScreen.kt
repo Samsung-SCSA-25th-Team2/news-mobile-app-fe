@@ -1,9 +1,15 @@
 package com.example.mynewsmobileappfe.feature.news.ui
 
+import android.util.Log
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -11,11 +17,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Nfc
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.outlined.ThumbDown
@@ -26,40 +33,32 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
-import android.util.Log
-import androidx.compose.material.icons.filled.BrokenImage
-import androidx.compose.ui.platform.LocalUriHandler
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
+import com.example.mynewsmobileappfe.MainActivity
 import com.example.mynewsmobileappfe.core.database.entity.Highlight
 import com.example.mynewsmobileappfe.feature.news.data.remote.dto.ArticleResponse
 import com.example.mynewsmobileappfe.feature.news.domain.model.ReactionType
-import androidx.activity.compose.BackHandler
-import com.example.mynewsmobileappfe.MainActivity
 import com.example.mynewsmobileappfe.feature.news.nfc.HceServiceManager
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
-import androidx.compose.foundation.gestures.drag
-
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -78,10 +77,9 @@ fun ArticleDetailScreen(
     val userReaction by viewModel.userReaction.collectAsStateWithLifecycle()
     val bookmarkEvent by viewModel.bookmarkEvent.collectAsStateWithLifecycle()
     val highlights by viewModel.highlights.collectAsStateWithLifecycle()
-    val uriHandler = LocalUriHandler.current   // 링크 타고 웹사이트
+    val uriHandler = LocalUriHandler.current
 
     val appContext = context.applicationContext
-
     val mainActivity = context as? MainActivity
 
     fun stopSendingAndRestoreReader() {
@@ -90,7 +88,6 @@ fun ArticleDetailScreen(
     }
 
     fun startSendingAndStopReader(articleIdToSend: Long) {
-        // ✅ 송신폰은 ReaderMode 끄고(HCE 충돌 방지) 송신 ON
         mainActivity?.disableForegroundReaderMode()
         HceServiceManager.enableSending(appContext, articleIdToSend)
     }
@@ -123,10 +120,8 @@ fun ArticleDetailScreen(
                     when (val state = articleState) {
                         is ArticleDetailState.Success -> {
 
-                            // delegated property 스마트캐스트 방지용: 로컬 변수로 받기
                             val bookmarkEventState = bookmarkEvent
 
-                            // ✅ UI에서 사용할 "최신 북마크 여부"
                             val isBookmarkedForUi =
                                 when (bookmarkEventState) {
                                     is BookmarkEvent.Success -> bookmarkEventState.isBookmarked
@@ -319,17 +314,15 @@ fun ArticleDetailScreen(
                                 val rawContent = content.replace("\\n", "\n")
 
                                 val contentForRender = if (rawContent.contains("\n")) {
-                                    // 줄바꿈 이미 있음 > 그대로 사용
                                     rawContent.replace("\n", "\n\u200B")
                                 } else {
-                                    // 줄바꿈 없음 > 문장 단위 줄바꿈 추가
                                     rawContent
                                         .replace(". ", ".\n\n\u200B")
                                         .replace("! ", "!\n\n\u200B")
                                         .replace("? ", "?\n\n\u200B")
                                 }
+
                                 if (isEditMode) {
-                                    // 안내 메시지
                                     Card(
                                         modifier = Modifier.fillMaxWidth(),
                                         colors = CardDefaults.cardColors(
@@ -338,7 +331,7 @@ fun ArticleDetailScreen(
                                         shape = RoundedCornerShape(8.dp)
                                     ) {
                                         Text(
-                                            text = "💡 글자를 길게 누른 뒤 드래그해서 범위를 선택하세요.\n위에 뜨는 팔레트에서 색을 선택하면 저장됩니다.",
+                                            text = "💡 글자를 길게 누른 뒤 드래그해서 범위를 선택하세요.\n위에 뜨는 팔레트에서 색을 선택하면 저장됩니다.\n(이미 칠해진 영역을 탭하면 삭제할 수 있어요.)",
                                             style = MaterialTheme.typography.bodyMedium,
                                             modifier = Modifier.padding(12.dp),
                                             color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -347,7 +340,6 @@ fun ArticleDetailScreen(
 
                                     Spacer(Modifier.height(16.dp))
 
-                                    // ✅ 편집/보기 모드 공통: 하이라이트 표시 + (편집모드면) 글자 드래그 선택 + 위에 색상 팝업
                                     HighlightDragText(
                                         content = contentForRender,
                                         highlights = highlights,
@@ -365,19 +357,21 @@ fun ArticleDetailScreen(
                                                 text = text,
                                                 color = colorHex
                                             )
+                                        },
+                                        onDeleteHighlight = { highlightIdToDelete ->
+                                            viewModel.deleteHighlight(highlightIdToDelete)
                                         }
                                     )
 
                                 } else {
-                                    // 보기 모드: 하이라이트만 표시
                                     HighlightedText(
                                         content = contentForRender,
                                         highlights = highlights
                                     )
                                 }
+
                                 Spacer(Modifier.height(16.dp))
                             }
-
 
                             // 원문 링크
                             Text(
@@ -386,9 +380,7 @@ fun ArticleDetailScreen(
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable {
-                                        uriHandler.openUri(article.url)
-                                    },
+                                    .clickable { uriHandler.openUri(article.url) },
                                 textAlign = TextAlign.Center
                             )
                             Text(
@@ -397,15 +389,14 @@ fun ArticleDetailScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable {
-                                        uriHandler.openUri(article.url)
-                                    },
+                                    .clickable { uriHandler.openUri(article.url) },
                                 textAlign = TextAlign.Center
                             )
 
                             Spacer(Modifier.height(24.dp))
                             Divider()
                             Spacer(Modifier.height(16.dp))
+
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -413,7 +404,6 @@ fun ArticleDetailScreen(
                                 horizontalArrangement = Arrangement.SpaceEvenly,
                                 verticalAlignment = Alignment.Top
                             ) {
-                                // 좋아요
                                 ReactionLikeColumn(
                                     article = article,
                                     userReaction = userReaction,
@@ -422,7 +412,6 @@ fun ArticleDetailScreen(
                                     onLoginRequired = onLoginRequired
                                 )
 
-                                // 싫어요
                                 ReactionDislikeColumn(
                                     article = article,
                                     userReaction = userReaction,
@@ -431,7 +420,6 @@ fun ArticleDetailScreen(
                                     onLoginRequired = onLoginRequired
                                 )
 
-                                // 북마크
                                 BookmarkButtonColumn(
                                     article = article,
                                     bookmarkEvent = bookmarkEvent,
@@ -441,7 +429,6 @@ fun ArticleDetailScreen(
                                     onLoginRequired = onLoginRequired
                                 )
                             }
-
 
                             Spacer(Modifier.height(16.dp))
                         }
@@ -473,15 +460,12 @@ private fun BookmarkButtonColumn(
                 isBookmarked = bookmarkEvent.isBookmarked
                 onResetEvent()
             }
-
             is BookmarkEvent.Error -> onResetEvent()
             else -> {}
         }
     }
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
         FilledIconButton(
             onClick = {
                 if (isLoggedIn) onToggle(isBookmarked)
@@ -514,7 +498,6 @@ private fun BookmarkButtonColumn(
     }
 }
 
-
 @Composable
 private fun ReactionLikeColumn(
     article: ArticleResponse,
@@ -524,16 +507,13 @@ private fun ReactionLikeColumn(
     onLoginRequired: () -> Unit
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-
         Row(verticalAlignment = Alignment.CenterVertically) {
             FilledIconButton(
                 onClick = {
                     if (isLoggedIn) {
                         val next =
-                            if (userReaction == ReactionType.LIKE)
-                                ReactionType.NONE
-                            else
-                                ReactionType.LIKE
+                            if (userReaction == ReactionType.LIKE) ReactionType.NONE
+                            else ReactionType.LIKE
                         onReact(next)
                     } else onLoginRequired()
                 },
@@ -560,14 +540,15 @@ private fun ReactionLikeColumn(
                 )
             }
             Spacer(Modifier.width(6.dp))
-
             Text(text = "${article.likes}")
         }
 
         Spacer(Modifier.height(6.dp))
 
-        Text(text = "좋아요",
-            style = MaterialTheme.typography.bodySmall)
+        Text(
+            text = "좋아요",
+            style = MaterialTheme.typography.bodySmall
+        )
     }
 }
 
@@ -580,16 +561,13 @@ private fun ReactionDislikeColumn(
     onLoginRequired: () -> Unit
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-
         Row(verticalAlignment = Alignment.CenterVertically) {
             FilledIconButton(
                 onClick = {
                     if (isLoggedIn) {
                         val next =
-                            if (userReaction == ReactionType.DISLIKE)
-                                ReactionType.NONE
-                            else
-                                ReactionType.DISLIKE
+                            if (userReaction == ReactionType.DISLIKE) ReactionType.NONE
+                            else ReactionType.DISLIKE
                         onReact(next)
                     } else onLoginRequired()
                 },
@@ -627,12 +605,6 @@ private fun ReactionDislikeColumn(
     }
 }
 
-
-/**
- * 형광펜 색상 선택 바
- *
- * 사용자가 텍스트를 선택하면 나타나는 색상 팔레트입니다.
- */
 @Composable
 fun ColorSelectionBar(
     onColorSelected: (String) -> Unit,
@@ -653,9 +625,7 @@ fun ColorSelectionBar(
             .padding(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -695,9 +665,6 @@ fun ColorSelectionBar(
     }
 }
 
-/**
- * 색상 버튼
- */
 @Composable
 private fun ColorButton(
     colorHex: String,
@@ -730,6 +697,7 @@ fun HighlightDragText(
     highlights: List<Highlight>,
     enabled: Boolean,
     onAddHighlight: (startIndex: Int, endExclusive: Int, colorHex: String) -> Unit,
+    onDeleteHighlight: (highlightId: Long) -> Unit, // ✅ 추가
     modifier: Modifier = Modifier
 ) {
     val pastel = remember {
@@ -753,6 +721,9 @@ fun HighlightDragText(
     var popupOpen by remember { mutableStateOf(false) }
     var popupOffset by remember { mutableStateOf(IntOffset(0, 0)) }
 
+    // ✅ 삭제 다이얼로그 상태
+    var deleteTarget by remember { mutableStateOf<Highlight?>(null) }
+
     fun clearSelection() {
         selStart = -1
         selEndExclusive = -1
@@ -764,7 +735,6 @@ fun HighlightDragText(
         buildAnnotatedString {
             append(content)
 
-            // 저장된 하이라이트
             highlights.forEach { h ->
                 val s = h.startIndex.coerceIn(0, content.length)
                 val e = h.endIndex.coerceIn(0, content.length)
@@ -777,7 +747,6 @@ fun HighlightDragText(
                 }
             }
 
-            // 현재 드래그/선택 프리뷰
             if (selStart >= 0 && selEndExclusive > selStart) {
                 addStyle(
                     SpanStyle(background = Color(0x55000000)),
@@ -789,35 +758,99 @@ fun HighlightDragText(
     }
 
     Box(modifier = modifier.fillMaxWidth()) {
+
+        // ✅ 삭제 다이얼로그
+        if (enabled && deleteTarget != null) {
+            val target = deleteTarget!!
+            AlertDialog(
+                onDismissRequest = { deleteTarget = null },
+                title = { Text("하이라이트 삭제") },
+                text = {
+                    val preview = runCatching {
+                        val s = target.startIndex.coerceIn(0, content.length)
+                        val e = target.endIndex.coerceIn(0, content.length)
+                        content.substring(s, e).trim().take(60)
+                    }.getOrNull()
+
+                    Text(
+                        text = if (!preview.isNullOrBlank())
+                            "이 하이라이트를 삭제할까요?\n\n\"$preview\""
+                        else
+                            "이 하이라이트를 삭제할까요?"
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            // ✅ 로컬 DB 삭제 (ViewModel -> Repository)
+                            onDeleteHighlight(target.id)
+                            deleteTarget = null
+                            clearSelection()
+                        }
+                    ) { Text("삭제") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { deleteTarget = null }) { Text("취소") }
+                }
+            )
+        }
+
         Text(
             text = annotated,
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier
                 .fillMaxWidth()
                 .onGloballyPositioned { textCoords = it }
-                // ✅ layout을 key로 넣지 말 것! enabled만 key로 둠
-                .pointerInput(enabled) {
+                .pointerInput(enabled, highlights) {
                     if (!enabled) return@pointerInput
 
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
-
-                        // 길게 누르기 성립할 때까지 대기
-                        val longPress = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
-
                         val l = layoutResult ?: return@awaitEachGesture
+
+                        // ✅ 먼저 "롱프레스"가 되나 기다림
+                        val longPress = awaitLongPressOrCancellation(down.id)
+
+                        // ✅ 롱프레스가 성립하지 않았다 = 보통 "탭" (하이라이트 클릭 삭제)
+                        if (longPress == null) {
+                            val tapped = l.getOffsetForPosition(down.position)
+                                .coerceIn(0, max(0, content.length - 1))
+
+                            // 탭한 위치가 어떤 하이라이트 범위 안인지 검사
+                            val hit = highlights
+                                .filter { h ->
+                                    val s = h.startIndex.coerceIn(0, content.length)
+                                    val e = h.endIndex.coerceIn(0, content.length)
+                                    tapped in s until e
+                                }
+                                // 겹칠 때는 "가장 최근" 느낌으로 id가 큰 것 우선
+                                .maxByOrNull { it.id }
+
+                            if (hit != null) {
+                                // 팔레트/선택이 떠있다면 닫고 삭제 다이얼로그
+                                clearSelection()
+                                deleteTarget = hit
+                            } else {
+                                // 하이라이트 아닌 곳 탭하면 선택/팝업 정리
+                                deleteTarget = null
+                                clearSelection()
+                            }
+
+                            return@awaitEachGesture
+                        }
+
+                        // ✅ 여기서부터는 롱프레스 + 드래그 선택 로직 (기존 그대로)
                         val coords = textCoords ?: return@awaitEachGesture
 
                         popupOpen = false
+                        deleteTarget = null
 
-                        // ✅ 길게 누른 "그 글자"부터 바로 선택 (1글자)
                         val anchor = l.getOffsetForPosition(longPress.position)
                             .coerceIn(0, max(0, content.length - 1))
 
                         selStart = anchor
                         selEndExclusive = (anchor + 1).coerceAtMost(content.length)
 
-                        // ✅ 길게 누른 뒤 손가락을 움직이면 글자 단위로 범위 확장
                         drag(down.id) { change ->
                             val cur = l.getOffsetForPosition(change.position)
                                 .coerceIn(0, max(0, content.length - 1))
@@ -828,18 +861,16 @@ fun HighlightDragText(
                             selStart = s
                             selEndExclusive = (eInclusive + 1).coerceAtMost(content.length)
 
-                            // 스크롤이 가로채지 않게 소비
                             change.consume()
                         }
 
-                        // ✅ 손을 떼는 순간 팔레트 팝업 표시
                         if (selStart >= 0 && selEndExclusive > selStart) {
                             val anchorIndex = selStart.coerceIn(0, max(0, content.length - 1))
                             val box = l.getBoundingBox(anchorIndex)
 
                             val windowPos = coords.positionInWindow()
                             val x = (windowPos.x + box.left).roundToInt()
-                            val y = (windowPos.y + box.top - 120f).roundToInt() // 위로 띄움
+                            val y = (windowPos.y + box.top - 120f).roundToInt()
 
                             popupOffset = IntOffset(x.coerceAtLeast(0), y.coerceAtLeast(0))
                             popupOpen = true
@@ -887,7 +918,10 @@ fun HighlightDragText(
                             Box(
                                 modifier = Modifier
                                     .size(26.dp)
-                                    .background(Color(android.graphics.Color.parseColor(hex)), CircleShape)
+                                    .background(
+                                        Color(android.graphics.Color.parseColor(hex)),
+                                        CircleShape
+                                    )
                                     .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
                                     .clickable {
                                         onAddHighlight(selStart, selEndExclusive, hex)
@@ -902,12 +936,8 @@ fun HighlightDragText(
     }
 }
 
-
 /**
- * 하이라이트 가능한 텍스트
- *
- * 문장 단위로 클릭하여 형광펜을 칠할 수 있습니다.
- * 이미 하이라이트된 부분은 색상으로 표시됩니다.
+ * 하이라이트 가능한 텍스트 (구버전/미사용 가능)
  */
 @Composable
 fun HighlightableText(
@@ -915,7 +945,6 @@ fun HighlightableText(
     highlights: List<Highlight>,
     onTextSelected: (startIndex: Int, endIndex: Int, text: String) -> Unit
 ) {
-    // 문장 단위로 분리 (마침표, 느낌표, 물음표 기준)
     val sentences = content.splitToSequence(". ", "! ", "? ")
         .filter { it.isNotBlank() }
         .toList()
@@ -934,16 +963,13 @@ fun HighlightableText(
             val startIndex = currentIndex
             val endIndex = currentIndex + sentenceWithPunctuation.length
 
-            // 이 문장에 해당하는 하이라이트 찾기
             val sentenceHighlights = highlights.filter { highlight ->
                 highlight.startIndex >= startIndex && highlight.endIndex <= endIndex
             }
 
-            // AnnotatedString 생성
             val annotatedText = buildAnnotatedString {
                 append(sentenceWithPunctuation)
 
-                // 하이라이트 적용
                 sentenceHighlights.forEach { highlight ->
                     val relativeStart = highlight.startIndex - startIndex
                     val relativeEnd = highlight.endIndex - startIndex
@@ -958,7 +984,6 @@ fun HighlightableText(
                 }
             }
 
-            // 클릭 가능한 텍스트
             Text(
                 text = annotatedText,
                 style = MaterialTheme.typography.bodyLarge,
@@ -977,8 +1002,6 @@ fun HighlightableText(
 
 /**
  * 하이라이트된 텍스트 (보기 전용)
- *
- * 저장된 하이라이트를 표시합니다. 클릭 불가능.
  */
 @Composable
 fun HighlightedText(
@@ -987,8 +1010,6 @@ fun HighlightedText(
 ) {
     val annotatedText = buildAnnotatedString {
         append(content)
-
-        // 모든 하이라이트 적용
         highlights.forEach { highlight ->
             addStyle(
                 style = SpanStyle(
@@ -1007,17 +1028,12 @@ fun HighlightedText(
     )
 }
 
-/**
- * 날짜 포맷팅 헬퍼 함수 (ArticleDetailScreen용)
- * ISO 8601 형식 → "yyyy.MM.dd HH:mm"
- */
 private fun formatDateDetail(isoDate: String): String {
     return try {
         val publishedAt = LocalDateTime.parse(isoDate, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
         val formatter = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm")
         publishedAt.format(formatter)
     } catch (e: Exception) {
-        // 파싱 실패 시 기본 포맷으로 fallback
         try {
             val parts = isoDate.split("T")
             val date = parts[0].split("-")
