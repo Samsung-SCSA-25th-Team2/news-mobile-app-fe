@@ -36,7 +36,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import android.util.Log
+import androidx.compose.foundation.background
 import androidx.compose.material.icons.filled.BrokenImage
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.sp
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -217,6 +225,11 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
+                    // 상단 헤더
+                    item(key = "home_header") {
+                        HomeHeader()
+                    }
+
                     // 랜덤 기사 (크게) - Crossfade 애니메이션
                     item(key = "random_article_container") {
                         Crossfade(
@@ -298,6 +311,59 @@ fun HomeScreen(
         }
     }
 }
+
+// 뉴스 상단
+@Composable
+fun HomeHeader() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White)
+            .padding(horizontal = 16.dp)
+            .padding(top = 20.dp, bottom = 12.dp)
+
+
+    ) {
+
+        Text(
+            text = buildAnnotatedString {
+                withStyle(SpanStyle(color = Color.Black)) {
+                    append("Today's ")
+                }
+                withStyle(SpanStyle(color = Color(0xFF000080))) {
+                    append("News")
+                }
+            },
+            style = MaterialTheme.typography.headlineMedium.copy(
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.3).sp
+            )
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Text(
+            text = formatHeaderDate(),
+            style = MaterialTheme.typography.bodyMedium.copy(
+                letterSpacing = 0.2.sp
+            ),
+            color = Color(0xFF6E6E73)
+        )
+
+        Divider(
+            modifier = Modifier.padding(top = 12.dp),
+            thickness = 0.5.dp,
+            color = Color(0xFFE5E5EA)
+        )
+    }
+}
+
+// 헤더에 날짜
+fun formatHeaderDate(): String {
+    val now = LocalDateTime.now()
+    return "${now.monthValue}월 ${now.dayOfMonth}일"
+}
+
 
 /**
  * 랜덤 기사 카드 (크게 표시)
@@ -392,24 +458,43 @@ fun RandomArticleCard(
 
                 Spacer(Modifier.height(8.dp))
 
-                // 출처 및 날짜
+                // 출처 + 날짜 (한 줄)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = formatDate(article.publishedAt),
+                        text = article.publisher,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip
+                    )
+
+                    Spacer(Modifier.width(8.dp))
+
+                    Text(
+                        text = "•",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.weight(1f))
+
+                    Spacer(Modifier.width(8.dp))
+
+                    // 날짜는 항상 더 작은 폰트(=길면 “폰트가 줄어든 느낌”)
                     Text(
-                        text = article.publisher,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary
+                        text = formatDate(article.publishedAt),
+                        style = MaterialTheme.typography.labelMedium, // 🔥 bodyMedium보다 작음
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip
                     )
                 }
-            }
+
+                Spacer(Modifier.width(8.dp))
+
+                }
+
         }
     }
 }
@@ -498,12 +583,39 @@ fun ArticleItem(
 
                 Spacer(Modifier.height(16.dp))   //이거 고치면 사진 작아짐
 
-                // 출처
-                Text(
-                    text = article.publisher,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                // 출처 및 날짜
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = article.publisher,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip
+                    )
+
+                    Spacer(Modifier.width(8.dp))
+
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(Modifier.width(8.dp))
+
+                    // 날짜는 항상 더 작은 폰트(=길면 “폰트가 줄어든 느낌”)
+                    Text(
+                        text = formatDate(article.publishedAt),
+                        style = MaterialTheme.typography.labelMedium, // 🔥 bodyMedium보다 작음
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip
+                    )
+                }
+
 
                 Spacer(Modifier.height(16.dp))
 
@@ -564,13 +676,6 @@ fun ArticleItem(
                     }
 
                     Spacer(Modifier.weight(1f))
-
-                    //날짜
-                    Text(
-                        text = formatDate(article.publishedAt),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
 
                     // 북마크
                     IconButton(
