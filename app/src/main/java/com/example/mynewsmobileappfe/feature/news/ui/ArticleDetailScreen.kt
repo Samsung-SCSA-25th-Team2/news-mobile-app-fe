@@ -1,6 +1,5 @@
 package com.example.mynewsmobileappfe.feature.news.ui
 
-import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -9,7 +8,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -33,7 +31,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -50,7 +47,22 @@ import com.example.mynewsmobileappfe.feature.news.domain.model.ReactionType
 import androidx.activity.compose.BackHandler
 import com.example.mynewsmobileappfe.MainActivity
 import com.example.mynewsmobileappfe.feature.news.nfc.HceServiceManager
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.foundation.gestures.drag
 
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -97,8 +109,8 @@ fun ArticleDetailScreen(
 
     // 편집 모드 상태
     var isEditMode by remember { mutableStateOf(false) }
-    var selectedTextRange by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-    var selectedText by remember { mutableStateOf<String?>(null) }
+//    var selectedTextRange by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+//    var selectedText by remember { mutableStateOf<String?>(null) }
 
     // 기사 로드
     LaunchedEffect(articleId) {
@@ -110,29 +122,31 @@ fun ArticleDetailScreen(
             TopAppBar(
                 title = { Text(if (isEditMode) "형광펜 편집" else "기사 상세") },
                 actions = {
-                    // 편집/완료 버튼 (북마크된 기사일 때만 표시)
+                    // ✅ 편집/완료 버튼 (북마크된 기사일 때만 표시)
                     when (val state = articleState) {
                         is ArticleDetailState.Success -> {
-                            if (state.article.bookmarked) {
+
+                            // delegated property 스마트캐스트 방지용: 로컬 변수로 받기
+                            val bookmarkEventState = bookmarkEvent
+
+                            // ✅ UI에서 사용할 "최신 북마크 여부"
+                            val isBookmarkedForUi =
+                                when (bookmarkEventState) {
+                                    is BookmarkEvent.Success -> bookmarkEventState.isBookmarked
+                                    else -> state.article.bookmarked
+                                }
+
+                            if (isBookmarkedForUi) {
                                 IconButton(
-                                    onClick = {
-                                        isEditMode = !isEditMode
-                                        if (!isEditMode) {
-                                            // 편집 모드 종료 시 선택 초기화
-                                            selectedTextRange = null
-                                            selectedText = null
-                                        }
-                                    }
+                                    onClick = { isEditMode = !isEditMode }
                                 ) {
                                     Icon(
                                         imageVector = if (isEditMode) Icons.Filled.Check else Icons.Filled.Edit,
                                         contentDescription = if (isEditMode) "완료" else "편집",
-                                        tint = if (isEditMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                                     )
                                 }
                             }
                         }
-
                         else -> {}
                     }
 
@@ -157,11 +171,7 @@ fun ArticleDetailScreen(
                                         }
                                     }
                                     else -> {
-                                        Toast.makeText(
-                                            context,
-                                            "기사를 불러오는 중입니다.",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
+                                        Toast.makeText(context, "기사를 불러오는 중입니다.", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             }
@@ -331,7 +341,7 @@ fun ArticleDetailScreen(
                                         shape = RoundedCornerShape(8.dp)
                                     ) {
                                         Text(
-                                            text = "💡 형광펜을 칠할 문장을 클릭하세요",
+                                            text = "💡 글자를 길게 누른 뒤 드래그해서 범위를 선택하세요.\n위에 뜨는 팔레트에서 색을 선택하면 저장됩니다.",
                                             style = MaterialTheme.typography.bodyMedium,
                                             modifier = Modifier.padding(12.dp),
                                             color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -340,39 +350,27 @@ fun ArticleDetailScreen(
 
                                     Spacer(Modifier.height(16.dp))
 
-                                    // 편집 모드: 문장 클릭 가능
-                                    HighlightableText(
+                                    // ✅ 편집/보기 모드 공통: 하이라이트 표시 + (편집모드면) 글자 드래그 선택 + 위에 색상 팝업
+                                    HighlightDragText(
                                         content = contentForRender,
                                         highlights = highlights,
-                                        onTextSelected = { start, end, text ->
-                                            selectedTextRange = Pair(start, end)
-                                            selectedText = text
+                                        enabled = isEditMode,
+                                        onAddHighlight = { start, endExclusive, colorHex ->
+                                            val safeStart = start.coerceIn(0, contentForRender.length)
+                                            val safeEnd = endExclusive.coerceIn(0, contentForRender.length)
+                                            if (safeEnd <= safeStart) return@HighlightDragText
+
+                                            val text = contentForRender.substring(safeStart, safeEnd)
+                                            viewModel.addHighlight(
+                                                articleId = articleId,
+                                                startIndex = safeStart,
+                                                endIndex = safeEnd,
+                                                text = text,
+                                                color = colorHex
+                                            )
                                         }
                                     )
 
-                                    // 색상 선택 바 (문장 선택 시 표시)
-                                    if (selectedText != null) {
-                                        Spacer(Modifier.height(16.dp))
-                                        ColorSelectionBar(
-                                            onColorSelected = { color ->
-                                                selectedTextRange?.let { (start, end) ->
-                                                    selectedText?.let { text ->
-                                                        viewModel.addHighlight(
-                                                            articleId = articleId,
-                                                            startIndex = start,
-                                                            endIndex = end,
-                                                            text = text,
-                                                            color = color
-                                                        )
-                                                    }
-                                                }
-                                            },
-                                            onDismiss = {
-                                                selectedTextRange = null
-                                                selectedText = null
-                                            }
-                                        )
-                                    }
                                 } else {
                                     // 보기 모드: 하이라이트만 표시
                                     HighlightedText(
@@ -728,6 +726,185 @@ private fun ColorButton(
         )
     }
 }
+
+@Composable
+fun HighlightDragText(
+    content: String,
+    highlights: List<Highlight>,
+    enabled: Boolean,
+    onAddHighlight: (startIndex: Int, endExclusive: Int, colorHex: String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val pastel = remember {
+        listOf(
+            "#FFB3BA", // 빨강(파스텔)
+            "#FFFFBA", // 노랑
+            "#BAFFC9", // 초록
+            "#BAE1FF", // 파랑
+            "#E6CCFF"  // 보라
+        )
+    }
+
+    var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+    var textCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+    // 선택 범위 [selStart, selEndExclusive)
+    var selStart by remember { mutableIntStateOf(-1) }
+    var selEndExclusive by remember { mutableIntStateOf(-1) }
+
+    // 팔레트 팝업
+    var popupOpen by remember { mutableStateOf(false) }
+    var popupOffset by remember { mutableStateOf(IntOffset(0, 0)) }
+
+    fun clearSelection() {
+        selStart = -1
+        selEndExclusive = -1
+        popupOpen = false
+    }
+
+    // 저장된 하이라이트 + 현재 선택 프리뷰(회색)
+    val annotated = remember(content, highlights, selStart, selEndExclusive) {
+        buildAnnotatedString {
+            append(content)
+
+            // 저장된 하이라이트
+            highlights.forEach { h ->
+                val s = h.startIndex.coerceIn(0, content.length)
+                val e = h.endIndex.coerceIn(0, content.length)
+                if (e > s) {
+                    addStyle(
+                        SpanStyle(background = Color(android.graphics.Color.parseColor(h.color))),
+                        start = s,
+                        end = e
+                    )
+                }
+            }
+
+            // 현재 드래그/선택 프리뷰
+            if (selStart >= 0 && selEndExclusive > selStart) {
+                addStyle(
+                    SpanStyle(background = Color(0x55000000)),
+                    start = selStart,
+                    end = selEndExclusive
+                )
+            }
+        }
+    }
+
+    Box(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = annotated,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier
+                .fillMaxWidth()
+                .onGloballyPositioned { textCoords = it }
+                // ✅ layout을 key로 넣지 말 것! enabled만 key로 둠
+                .pointerInput(enabled) {
+                    if (!enabled) return@pointerInput
+
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+
+                        // 길게 누르기 성립할 때까지 대기
+                        val longPress = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
+
+                        val l = layoutResult ?: return@awaitEachGesture
+                        val coords = textCoords ?: return@awaitEachGesture
+
+                        popupOpen = false
+
+                        // ✅ 길게 누른 "그 글자"부터 바로 선택 (1글자)
+                        val anchor = l.getOffsetForPosition(longPress.position)
+                            .coerceIn(0, max(0, content.length - 1))
+
+                        selStart = anchor
+                        selEndExclusive = (anchor + 1).coerceAtMost(content.length)
+
+                        // ✅ 길게 누른 뒤 손가락을 움직이면 글자 단위로 범위 확장
+                        drag(down.id) { change ->
+                            val cur = l.getOffsetForPosition(change.position)
+                                .coerceIn(0, max(0, content.length - 1))
+
+                            val s = min(anchor, cur)
+                            val eInclusive = max(anchor, cur)
+
+                            selStart = s
+                            selEndExclusive = (eInclusive + 1).coerceAtMost(content.length)
+
+                            // 스크롤이 가로채지 않게 소비
+                            change.consume()
+                        }
+
+                        // ✅ 손을 떼는 순간 팔레트 팝업 표시
+                        if (selStart >= 0 && selEndExclusive > selStart) {
+                            val anchorIndex = selStart.coerceIn(0, max(0, content.length - 1))
+                            val box = l.getBoundingBox(anchorIndex)
+
+                            val windowPos = coords.positionInWindow()
+                            val x = (windowPos.x + box.left).roundToInt()
+                            val y = (windowPos.y + box.top - 120f).roundToInt() // 위로 띄움
+
+                            popupOffset = IntOffset(x.coerceAtLeast(0), y.coerceAtLeast(0))
+                            popupOpen = true
+                        } else {
+                            clearSelection()
+                        }
+                    }
+                },
+            onTextLayout = { layoutResult = it }
+        )
+
+        // ✅ 팝업이 떠 있을 때, 바깥 누르면 닫기
+        if (enabled && popupOpen) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false)
+                            clearSelection()
+                        }
+                    }
+            )
+        }
+
+        // ✅ “사라지지 않는” 팔레트 팝업
+        if (enabled && popupOpen && selStart >= 0 && selEndExclusive > selStart) {
+            Popup(
+                offset = popupOffset,
+                properties = PopupProperties(
+                    focusable = false,
+                    dismissOnBackPress = false,
+                    dismissOnClickOutside = false
+                )
+            ) {
+                Surface(
+                    tonalElevation = 6.dp,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        pastel.forEach { hex ->
+                            Box(
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .background(Color(android.graphics.Color.parseColor(hex)), CircleShape)
+                                    .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                                    .clickable {
+                                        onAddHighlight(selStart, selEndExclusive, hex)
+                                        clearSelection()
+                                    }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 
 /**
  * 하이라이트 가능한 텍스트
