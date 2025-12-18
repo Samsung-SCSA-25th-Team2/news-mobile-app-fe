@@ -266,27 +266,15 @@ fun HomeScreen(
                                 onArticleClick(displayArticle.articleId)
                             },
                             onLikeClick = {
-                                if (isLoggedIn) {
-                                    viewModel.toggleLike(displayArticle.articleId)
-                                } else {
-                                    onLoginRequired()
-                                }
+                                // HomeScreen에서는 읽기 전용 - 아무 동작도 하지 않음
                             },
                             onDislikeClick = {
-                                if (isLoggedIn) {
-                                    viewModel.toggleDislike(displayArticle.articleId)
-                                } else {
-                                    onLoginRequired()
-                                }
+                                // HomeScreen에서는 읽기 전용 - 아무 동작도 하지 않음
                             },
                             onBookmarkClick = {
-                                if (isLoggedIn) {
-                                    viewModel.toggleBookmark(displayArticle.articleId, displayArticle.bookmarked)
-                                } else {
-                                    onLoginRequired()
-                                }
+                                // HomeScreen에서는 읽기 전용 - 아무 동작도 하지 않음
                             },
-                            enableActions = true,
+                            enableActions = false,
                             userReaction = userReaction
                         )
                     }
