@@ -56,12 +56,8 @@ import com.example.mynewsmobileappfe.MainActivity
 import com.example.mynewsmobileappfe.core.database.entity.Highlight
 import com.example.mynewsmobileappfe.feature.news.data.remote.dto.ArticleResponse
 import com.example.mynewsmobileappfe.feature.news.domain.model.ReactionType
-import com.example.mynewsmobileappfe.feature.news.nfc.HceServiceManager
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import kotlin.math.max
-import kotlin.math.min
-import kotlin.math.roundToInt
+import com.example.mynewsmobileappfe.feature.news.nfc.LinkHceService
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,30 +74,6 @@ fun ArticleDetailScreen(
     val bookmarkEvent by viewModel.bookmarkEvent.collectAsStateWithLifecycle()
     val highlights by viewModel.highlights.collectAsStateWithLifecycle()
     val uriHandler = LocalUriHandler.current
-
-    val appContext = context.applicationContext
-    val mainActivity = context as? MainActivity
-
-    fun stopSendingAndRestoreReader() {
-        HceServiceManager.disableSending(appContext)
-        mainActivity?.enableForegroundReaderMode()
-    }
-
-    fun startSendingAndStopReader(articleIdToSend: Long) {
-        mainActivity?.disableForegroundReaderMode()
-        HceServiceManager.enableSending(appContext, articleIdToSend)
-    }
-
-    BackHandler {
-        stopSendingAndRestoreReader()
-        onNavigateBack()
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            stopSendingAndRestoreReader()
-        }
-    }
 
     // 편집 모드 상태
     var isEditMode by remember { mutableStateOf(false) }
@@ -148,20 +120,18 @@ fun ArticleDetailScreen(
                             onClick = {
                                 when (val state = articleState) {
                                     is ArticleDetailState.Success -> {
+                                        // 여기서 기사 ID로 송신 모드 ON
                                         val articleIdToSend = state.article.articleId
 
-                                        if (HceServiceManager.isSending()) {
-                                            stopSendingAndRestoreReader()
-                                            Toast.makeText(context, "NFC 송신 모드 OFF", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            startSendingAndStopReader(articleIdToSend)
-                                            Toast.makeText(
-                                                context,
-                                                "NFC 송신 모드 ON\n다른 폰을 태그하면 articleId=$articleIdToSend 전송!",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
+                                        LinkHceService.startSending(articleIdToSend)
+
+                                        Toast.makeText(
+                                            context,
+                                            "이 기사를 NFC로 보낼 준비가 되었어요.\n다른 폰을 태그하면 articleId=$articleIdToSend 전송!",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
                                     }
+
                                     else -> {
                                         Toast.makeText(context, "기사를 불러오는 중입니다.", Toast.LENGTH_SHORT).show()
                                     }
@@ -612,11 +582,11 @@ fun ColorSelectionBar(
     modifier: Modifier = Modifier
 ) {
     val colors = listOf(
-        "#FFFF00" to "노란색",
+        "#F6EAC2" to "노란색",
         "#90EE90" to "초록색",
-        "#87CEEB" to "하늘색",
-        "#FFB6C1" to "핑크색",
-        "#FFA500" to "주황색"
+        "#C3D6F2" to "하늘색",
+        "#FEE1E8" to "핑크색",
+        "#FED7C3" to "주황색"
     )
 
     Card(
