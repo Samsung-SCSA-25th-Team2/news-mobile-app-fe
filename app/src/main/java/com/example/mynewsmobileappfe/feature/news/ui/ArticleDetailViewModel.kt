@@ -29,7 +29,7 @@ import com.example.mynewsmobileappfe.feature.news.data.remote.api.ArticleApiServ
 class ArticleDetailViewModel @Inject constructor(
     private val articleActionManager: ArticleActionManager,
     private val highlightRepository: HighlightRepository,
-    private val articleApi: ArticleApiService, // ✅ 추가: 서버에서 기사 상세 조회용
+    private val articleApi: ArticleApiService,
 ) : ViewModel() {
 
     private val _articleState = MutableStateFlow<ArticleDetailState>(ArticleDetailState.Idle)
@@ -43,6 +43,10 @@ class ArticleDetailViewModel @Inject constructor(
 
     private val _highlights = MutableStateFlow<List<Highlight>>(emptyList())
     val highlights: StateFlow<List<Highlight>> = _highlights.asStateFlow()
+
+    // 좋아요/싫어요 연타 방지를 위한 마지막 반응 시간
+    private var lastReactionTime = 0L
+    private val reactionCooldownMs = 500L // 0.5초
 
     init {
         // ArticleCache 변경 사항 구독
@@ -207,6 +211,14 @@ class ArticleDetailViewModel @Inject constructor(
     }
 
     fun reactToArticle(articleId: Long, reactionType: ReactionType) {
+        // 연타 방지: 마지막 반응 후 0.5초가 지나지 않았으면 무시
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastReactionTime < reactionCooldownMs) {
+            android.util.Log.d("ArticleDetailViewModel", "Reaction ignored due to cooldown")
+            return
+        }
+        lastReactionTime = currentTime
+
         val currentReaction = _userReaction.value
 
         articleActionManager.reactToArticle(

@@ -56,7 +56,12 @@ import com.example.mynewsmobileappfe.MainActivity
 import com.example.mynewsmobileappfe.core.database.entity.Highlight
 import com.example.mynewsmobileappfe.feature.news.data.remote.dto.ArticleResponse
 import com.example.mynewsmobileappfe.feature.news.domain.model.ReactionType
-import com.example.mynewsmobileappfe.feature.news.nfc.LinkHceService
+import com.example.mynewsmobileappfe.feature.news.nfc.HceServiceManager
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -74,6 +79,34 @@ fun ArticleDetailScreen(
     val bookmarkEvent by viewModel.bookmarkEvent.collectAsStateWithLifecycle()
     val highlights by viewModel.highlights.collectAsStateWithLifecycle()
     val uriHandler = LocalUriHandler.current
+
+    val appContext = context.applicationContext
+    val mainActivity = context as? MainActivity
+
+    // ✅ NFC 송신 종료 + ReaderMode 복원
+    fun stopSendingAndRestoreReader() {
+        HceServiceManager.disableSending(appContext)
+        mainActivity?.enableForegroundReaderMode()
+    }
+
+    // ✅ ReaderMode 끄고 NFC 송신 시작 (HCE 충돌 방지)
+    fun startSendingAndStopReader(articleIdToSend: Long) {
+        mainActivity?.disableForegroundReaderMode()
+        HceServiceManager.enableSending(appContext, articleIdToSend)
+    }
+
+    // ✅ 뒤로 가기 시 NFC 송신 종료 + ReaderMode 복원
+    BackHandler {
+        stopSendingAndRestoreReader()
+        onNavigateBack()
+    }
+
+    // ✅ 화면 종료 시 NFC 송신 종료 + ReaderMode 복원
+    DisposableEffect(Unit) {
+        onDispose {
+            stopSendingAndRestoreReader()
+        }
+    }
 
     // 편집 모드 상태
     var isEditMode by remember { mutableStateOf(false) }
@@ -114,24 +147,27 @@ fun ArticleDetailScreen(
                         else -> {}
                     }
 
-                    // 공유 버튼
+                    // 공유 버튼 (토글 방식)
                     if (!isEditMode) {
                         IconButton(
                             onClick = {
                                 when (val state = articleState) {
                                     is ArticleDetailState.Success -> {
-                                        // 여기서 기사 ID로 송신 모드 ON
                                         val articleIdToSend = state.article.articleId
 
-                                        LinkHceService.startSending(articleIdToSend)
-
-                                        Toast.makeText(
-                                            context,
-                                            "이 기사를 NFC로 보낼 준비가 되었어요.\n다른 폰을 태그하면 articleId=$articleIdToSend 전송!",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
+                                        // ✅ 토글 방식: 이미 송신 중이면 끄고, 아니면 켜기
+                                        if (HceServiceManager.isSending()) {
+                                            stopSendingAndRestoreReader()
+                                            Toast.makeText(context, "NFC 송신 모드 OFF", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            startSendingAndStopReader(articleIdToSend)
+                                            Toast.makeText(
+                                                context,
+                                                "NFC 송신 모드 ON\n다른 폰을 태그하면 articleId=$articleIdToSend 전송!",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
                                     }
-
                                     else -> {
                                         Toast.makeText(context, "기사를 불러오는 중입니다.", Toast.LENGTH_SHORT).show()
                                     }
@@ -141,7 +177,10 @@ fun ArticleDetailScreen(
                             Icon(
                                 imageVector = Icons.Filled.Nfc,
                                 contentDescription = "기사 NFC 공유",
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = if (HceServiceManager.isSending())
+                                    MaterialTheme.colorScheme.error
+                                else
+                                    MaterialTheme.colorScheme.primary
                             )
                         }
                     }
