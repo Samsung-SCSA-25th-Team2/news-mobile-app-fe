@@ -56,7 +56,7 @@ import com.example.mynewsmobileappfe.MainActivity
 import com.example.mynewsmobileappfe.core.database.entity.Highlight
 import com.example.mynewsmobileappfe.feature.news.data.remote.dto.ArticleResponse
 import com.example.mynewsmobileappfe.feature.news.domain.model.ReactionType
-import com.example.mynewsmobileappfe.feature.news.nfc.LinkHceService
+import com.example.mynewsmobileappfe.feature.news.nfc.HceServiceManager
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -81,6 +81,19 @@ fun ArticleDetailScreen(
     // 기사 로드
     LaunchedEffect(articleId) {
         viewModel.loadArticle(articleId)
+    }
+
+    // NFC 송신 모드 cleanup
+    DisposableEffect(Unit) {
+        onDispose {
+            HceServiceManager.disableSending(context)
+        }
+    }
+
+    // 뒤로가기 처리
+    BackHandler {
+        HceServiceManager.disableSending(context)
+        onNavigateBack()
     }
 
     Scaffold(
@@ -123,7 +136,7 @@ fun ArticleDetailScreen(
                                         // 여기서 기사 ID로 송신 모드 ON
                                         val articleIdToSend = state.article.articleId
 
-                                        LinkHceService.startSending(articleIdToSend)
+                                        HceServiceManager.enableSending(context, articleIdToSend)
 
                                         Toast.makeText(
                                             context,
