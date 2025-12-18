@@ -64,7 +64,6 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ArticleDetailScreen(
@@ -109,8 +108,6 @@ fun ArticleDetailScreen(
 
     // 편집 모드 상태
     var isEditMode by remember { mutableStateOf(false) }
-//    var selectedTextRange by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-//    var selectedText by remember { mutableStateOf<String?>(null) }
 
     // 기사 로드
     LaunchedEffect(articleId) {
