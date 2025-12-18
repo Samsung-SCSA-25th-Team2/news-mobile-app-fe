@@ -61,17 +61,23 @@ object ArticleCache {
     }
 
     private fun merge(old: ArticleResponse?, new: ArticleResponse): ArticleResponse {
-        if (old == null) return new
+        if (old == null) {
+            // 캐시에 처음 들어오는 경우라도 BookmarkCache에 값 있으면 덮어씀
+            val overlay = BookmarkCache.getBookmarkedOrNull(new.articleId)
+            return if (overlay != null) new.copy(bookmarked = overlay) else new
+        }
 
-        // 스마트 병합 전략:
-        // 1. bookmarked: 로컬에서 true면 유지 (옵티미스틱 북마크 추가 보존)
-        // 2. userReaction: 서버가 null이면 로컬 값 유지 (옵티미스틱 반응 보존)
-        // 3. likes/dislikes: 서버 값을 신뢰 (권위 있는 카운트)
+        val bookmarkOverlay = BookmarkCache.getBookmarkedOrNull(new.articleId)
+
         return new.copy(
             content = new.content ?: old.content,
             likes = new.likes,
             dislikes = new.dislikes,
-            bookmarked = old.bookmarked || new.bookmarked,
+
+            // ✅ 북마크: 로컬(BookmarkCache) 값이 있으면 그걸 최우선으로
+            bookmarked = bookmarkOverlay ?: (old.bookmarked || new.bookmarked),
+
+            // ✅ 반응: 서버 null이면 로컬 값 유지
             userReaction = new.userReaction ?: old.userReaction
         )
     }

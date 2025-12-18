@@ -5,6 +5,7 @@ import com.example.mynewsmobileappfe.feature.bookmark.domain.repository.Bookmark
 import com.example.mynewsmobileappfe.feature.news.domain.model.ReactionType
 import com.example.mynewsmobileappfe.feature.news.domain.repository.ArticleRepository
 import com.example.mynewsmobileappfe.feature.news.cache.ArticleCache
+import com.example.mynewsmobileappfe.feature.news.cache.BookmarkCache
 import com.example.mynewsmobileappfe.feature.news.cache.ReactionCache
 import com.example.mynewsmobileappfe.feature.news.data.local.UserActionStore
 import kotlinx.coroutines.CoroutineScope
@@ -153,52 +154,43 @@ class ArticleActionManager @Inject constructor(
         scope: CoroutineScope,
         onError: ((String) -> Unit)? = null
     ) {
-        android.util.Log.d("ArticleActionManager", "toggleBookmark called: articleId=$articleId, current=$isCurrentlyBookmarked")
-
-        // 1. 즉시 로컬 상태 업데이트 (Optimistic)
         val newBookmarkState = !isCurrentlyBookmarked
 
-        // 캐시에 기사가 있는지 확인
-        val article = ArticleCache.getArticle(articleId)
-        if (article != null) {
-            android.util.Log.d("ArticleActionManager", "Article found in cache, updating bookmark state to $newBookmarkState")
-            ArticleCache.updateArticle(articleId) { article ->
-                article.copy(bookmarked = newBookmarkState)
-            }
-        } else {
-            android.util.Log.w("ArticleActionManager", "Article NOT found in cache! articleId=$articleId")
+        // ✅ 0) 북마크 캐시 먼저 갱신 (다른 화면들도 즉시 일관성 유지)
+        BookmarkCache.setBookmarked(articleId, newBookmarkState)
+
+        // 1) ArticleCache optimistic update
+        ArticleCache.updateArticle(articleId) { article ->
+            article.copy(bookmarked = newBookmarkState)
         }
+
         scope.launch {
             userActionStore.setBookmarked(articleId, newBookmarkState)
         }
 
-        // 2. 백그라운드에서 서버 요청
         val flow = if (isCurrentlyBookmarked) {
             bookmarkRepository.removeBookmark(articleId)
         } else {
             bookmarkRepository.addBookmark(articleId)
         }
 
-        flow
-            .onEach { result ->
-                when (result) {
-                    is Resource.Success -> {
-                        android.util.Log.d("ArticleActionManager", "Bookmark server request succeeded")
+        flow.onEach { result ->
+            when (result) {
+                is Resource.Error -> {
+                    // ✅ 실패 시 롤백: BookmarkCache/ArticleCache/UserActionStore 모두 되돌리기
+                    BookmarkCache.setBookmarked(articleId, isCurrentlyBookmarked)
+
+                    ArticleCache.updateArticle(articleId) { article ->
+                        article.copy(bookmarked = isCurrentlyBookmarked)
                     }
-                    is Resource.Error -> {
-                        android.util.Log.e("ArticleActionManager", "Bookmark server request failed: ${result.message}")
-                        // 실패 시 롤백
-                        ArticleCache.updateArticle(articleId) { article ->
-                            article.copy(bookmarked = isCurrentlyBookmarked)
-                        }
-                        scope.launch {
-                            userActionStore.setBookmarked(articleId, isCurrentlyBookmarked)
-                        }
-                        onError?.invoke(result.message ?: "북마크 처리 실패")
+                    scope.launch {
+                        userActionStore.setBookmarked(articleId, isCurrentlyBookmarked)
                     }
-                    else -> {}
+                    onError?.invoke(result.message ?: "북마크 처리 실패")
                 }
+                else -> {}
             }
+        }
             .flowOn(Dispatchers.IO)
             .launchIn(scope)
     }

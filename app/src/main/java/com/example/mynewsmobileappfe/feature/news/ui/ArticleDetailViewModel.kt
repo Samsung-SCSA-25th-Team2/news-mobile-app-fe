@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mynewsmobileappfe.core.database.entity.Highlight
 import com.example.mynewsmobileappfe.feature.news.cache.ArticleCache
+import com.example.mynewsmobileappfe.feature.news.cache.BookmarkCache
 import com.example.mynewsmobileappfe.feature.news.cache.ReactionCache
 import com.example.mynewsmobileappfe.feature.news.domain.model.ReactionType
 import com.example.mynewsmobileappfe.feature.news.domain.repository.HighlightRepository
@@ -65,6 +66,19 @@ class ArticleDetailViewModel @Inject constructor(
                 }
             }
             .launchIn(viewModelScope)
+
+        // ✅ 북마크 캐시 변경 사항 구독 (상세 화면 즉시 동기화)
+        BookmarkCache.bookmarks
+            .onEach { bookmarkMap ->
+                val currentState = _articleState.value
+                if (currentState is ArticleDetailState.Success) {
+                    val id = currentState.article.articleId
+                    bookmarkMap[id]?.let { bookmarked ->
+                        ArticleCache.updateArticle(id) { it.copy(bookmarked = bookmarked) }
+                    }
+                }
+            }
+            .launchIn(viewModelScope)
     }
 
     /**
@@ -97,15 +111,17 @@ class ArticleDetailViewModel @Inject constructor(
             if (remoteResult.isSuccessful && remoteResult.body() != null) {
                 val article = remoteResult.body()!!
 
-                // ✅ 상태 최신화
-                _articleState.value = ArticleDetailState.Success(article)
+                // ✅ 1) 서버 응답을 캐시에 먼저 넣어서 merge(북마크/반응 정합성 유지)
+                ArticleCache.putArticle(article)
 
-                // ✅ userReaction 동기화
-                ReactionCache.setReactionFromString(articleId, article.userReaction)
+                // ✅ 2) 캐시에서 "merge된 결과"를 다시 꺼내서 화면에 반영
+                val merged = ArticleCache.getArticle(articleId) ?: article
+                _articleState.value = ArticleDetailState.Success(merged)
+
+                // ✅ userReaction 동기화도 merged 기준으로
+                ReactionCache.setReactionFromString(articleId, merged.userReaction)
                 _userReaction.value = ReactionCache.getReaction(articleId)
 
-                // (선택) ArticleCache에도 넣고 싶으면, 너 캐시에 put/update 함수가 있으면 여기서 호출
-                // ArticleCache.putArticle(article)
                 return@launch
             }
 
