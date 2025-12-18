@@ -57,6 +57,11 @@ import com.example.mynewsmobileappfe.core.database.entity.Highlight
 import com.example.mynewsmobileappfe.feature.news.data.remote.dto.ArticleResponse
 import com.example.mynewsmobileappfe.feature.news.domain.model.ReactionType
 import com.example.mynewsmobileappfe.feature.news.nfc.HceServiceManager
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,22 +83,25 @@ fun ArticleDetailScreen(
     val appContext = context.applicationContext
     val mainActivity = context as? MainActivity
 
+    // ✅ NFC 송신 종료 + ReaderMode 복원
     fun stopSendingAndRestoreReader() {
         HceServiceManager.disableSending(appContext)
         mainActivity?.enableForegroundReaderMode()
     }
 
+    // ✅ ReaderMode 끄고 NFC 송신 시작 (HCE 충돌 방지)
     fun startSendingAndStopReader(articleIdToSend: Long) {
-        // ✅ 송신폰은 ReaderMode 끄고(HCE 충돌 방지) 송신 ON
         mainActivity?.disableForegroundReaderMode()
         HceServiceManager.enableSending(appContext, articleIdToSend)
     }
 
+    // ✅ 뒤로 가기 시 NFC 송신 종료 + ReaderMode 복원
     BackHandler {
         stopSendingAndRestoreReader()
         onNavigateBack()
     }
 
+    // ✅ 화면 종료 시 NFC 송신 종료 + ReaderMode 복원
     DisposableEffect(Unit) {
         onDispose {
             stopSendingAndRestoreReader()
@@ -139,7 +147,7 @@ fun ArticleDetailScreen(
                         else -> {}
                     }
 
-                    // 공유 버튼
+                    // 공유 버튼 (토글 방식)
                     if (!isEditMode) {
                         IconButton(
                             onClick = {
@@ -147,6 +155,7 @@ fun ArticleDetailScreen(
                                     is ArticleDetailState.Success -> {
                                         val articleIdToSend = state.article.articleId
 
+                                        // ✅ 토글 방식: 이미 송신 중이면 끄고, 아니면 켜기
                                         if (HceServiceManager.isSending()) {
                                             stopSendingAndRestoreReader()
                                             Toast.makeText(context, "NFC 송신 모드 OFF", Toast.LENGTH_SHORT).show()
@@ -160,11 +169,7 @@ fun ArticleDetailScreen(
                                         }
                                     }
                                     else -> {
-                                        Toast.makeText(
-                                            context,
-                                            "기사를 불러오는 중입니다.",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
+                                        Toast.makeText(context, "기사를 불러오는 중입니다.", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             }
@@ -172,7 +177,10 @@ fun ArticleDetailScreen(
                             Icon(
                                 imageVector = Icons.Filled.Nfc,
                                 contentDescription = "기사 NFC 공유",
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = if (HceServiceManager.isSending())
+                                    MaterialTheme.colorScheme.error
+                                else
+                                    MaterialTheme.colorScheme.primary
                             )
                         }
                     }

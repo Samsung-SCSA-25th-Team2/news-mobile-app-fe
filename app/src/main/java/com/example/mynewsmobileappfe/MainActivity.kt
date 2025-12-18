@@ -132,7 +132,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onPause() {
-        // ✅ 앱이 백그라운드로 가면 수신 OFF + 송신도 무조건 OFF
+        // ✅ 앱이 백그라운드로 가면 수신 OFF + 송신도 OFF
         disableForegroundReaderMode()
         HceServiceManager.disableSending(applicationContext)
         Log.d("NFC", "onPause: ReaderMode OFF + Sending OFF")
